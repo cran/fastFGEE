@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<meta name="author" content="Gabriel Loewinger" />
+
+<meta name="date" content="2026-04-01" />
+
+<title>fastFGEE: Functional Generalized Estimating Equations</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { display: inline-block; text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">fastFGEE: Functional Generalized Estimating
+Equations</h1>
+<h4 class="author">Gabriel Loewinger</h4>
+<h4 class="date">2026-04-01</h4>
+
+
+
+<!-- Suggested package location: vignettes/fastFGEE.Rmd -->
+<div id="installation" class="section level1">
+<h1>Installation</h1>
+<p>The development version of <code>fastFGEE</code> can be installed
+with:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a>remotes<span class="sc">::</span><span class="fu">install_github</span>(<span class="st">&quot;gloewing/fastFGEE&quot;</span>, <span class="at">build_vignettes =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
+</div>
+<div id="introduction" class="section level1">
+<h1>Introduction</h1>
+<p><code>fastFGEE</code> fits functional generalized estimating
+equations (fGEE) for longitudinal functional outcomes. The typical
+workflow is:</p>
+<ol style="list-style-type: decimal">
+<li>fit an initial function-on-scalar regression with
+<code>refund::pffr()</code>,</li>
+<li>choose smoothing parameters with cluster cross-validation, and</li>
+<li>optionally update the initial fit with one or more fGEE
+iterations.</li>
+</ol>
+<p>The current interface uses separate arguments for the longitudinal
+and functional working correlations:</p>
+<ul>
+<li><code>corr_long</code> controls the correlation structure across
+repeated observations within cluster,</li>
+<li><code>corr_fn</code> controls the correlation structure along the
+functional domain.</li>
+</ul>
+<p>This replaces the older single-argument <code>cov.type</code>
+interface used in the original vignette. Likewise, the old
+<code>sandwich</code> argument is now replaced by
+<code>var.type</code>.</p>
+<p>A useful way to think about the main fitting options is:</p>
+<ul>
+<li><code>max.iter = 1</code>: one-step fGEE,</li>
+<li><code>max.iter &gt; 1</code>: fully-iterated final fit,</li>
+<li><code>gee.fit = FALSE</code>: do <strong>not</strong> perform the
+GEE update; instead, keep the initial <code>pffr()</code> fit and
+compute robust inference for that fit.</li>
+</ul>
+<p>For most users, <code>max.iter = 1</code> is the default fast
+estimator, while <code>max.iter = 100</code> is a practical way to
+approximate a fully-iterated fGEE fit.</p>
+</div>
+<div id="loading-example-data" class="section level1">
+<h1>Loading example data</h1>
+<p>The source package currently includes a simulated example file named
+<code>binary_ar1_data</code>. A robust way to locate it is:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>dat_path <span class="ot">&lt;-</span> <span class="fu">system.file</span>(<span class="st">&quot;data&quot;</span>, <span class="st">&quot;binary_ar1_data&quot;</span>, <span class="at">package =</span> <span class="st">&quot;fastFGEE&quot;</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="cf">if</span> (dat_path <span class="sc">==</span> <span class="st">&quot;&quot;</span>) {</span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>  dat_path <span class="ot">&lt;-</span> <span class="st">&quot;binary_ar1_data&quot;</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>}</span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>dat0 <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(dat_path)</span></code></pre></div>
+<p>The outcome is stored as a matrix inside a data frame column. A
+standard wide-format data object for <code>fgee()</code> looks like
+this:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>dat <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>  <span class="at">Y =</span> <span class="fu">I</span>(dat0<span class="sc">$</span>Y),</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>  <span class="at">X1 =</span> dat0<span class="sc">$</span>X1,</span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>  <span class="at">X2 =</span> dat0<span class="sc">$</span>X2,</span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>  <span class="at">ID =</span> dat0<span class="sc">$</span>ID,</span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>  <span class="at">time =</span> dat0<span class="sc">$</span>time</span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a>)</span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a><span class="fu">head</span>(<span class="fu">as.matrix</span>(dat<span class="sc">$</span>Y)[, <span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>])</span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a><span class="fu">head</span>(dat[<span class="fu">c</span>(<span class="st">&quot;ID&quot;</span>, <span class="st">&quot;X1&quot;</span>, <span class="st">&quot;X2&quot;</span>, <span class="st">&quot;time&quot;</span>)])</span></code></pre></div>
+<p>Here each row corresponds to one longitudinal observation, and
+<code>Y</code> is the functional outcome observed on a grid of length
+<code>L</code>.</p>
+</div>
+<div id="a-basic-one-step-fit" class="section level1">
+<h1>A basic one-step fit</h1>
+<p>The simplest current pattern is to specify <code>corr_long</code> and
+<code>corr_fn</code> directly. For example, the following fits a
+one-step fGEE with AR1 correlation in the longitudinal direction and
+independence along the functional domain:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>fit_1step <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;independence&quot;</span>,</span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a>  <span class="at">rho.smooth =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a>  <span class="at">max.iter =</span> <span class="dv">1</span>,</span>
+<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a>  <span class="at">cv =</span> <span class="st">&quot;fastkfold&quot;</span>,</span>
+<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
+<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
+<span id="cb4-14"><a href="#cb4-14" tabindex="-1"></a>)</span>
+<span id="cb4-15"><a href="#cb4-15" tabindex="-1"></a></span>
+<span id="cb4-16"><a href="#cb4-16" tabindex="-1"></a><span class="fu">fgee.plot</span>(fit_1step)</span></code></pre></div>
+<p>The plotting method uses the fitted confidence intervals returned by
+<code>fgee()</code> and produces coefficient-function plots for the
+intercept and covariate effects.</p>
+</div>
+<div id="one-step-fully-iterated-and-pffr-only-fits" class="section level1">
+<h1>One-step, fully-iterated, and pffr-only fits</h1>
+<div id="one-step-fgee" class="section level2">
+<h2>One-step fGEE</h2>
+<p>A one-step fit is obtained with <code>max.iter = 1</code>. This is
+the main fast estimator described in the paper.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>fit_1step <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a>  <span class="at">max.iter =</span> <span class="dv">1</span>,</span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a>  <span class="at">cv =</span> <span class="st">&quot;fastkfold&quot;</span>,</span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
+<span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a>)</span></code></pre></div>
+</div>
+<div id="fully-iterated-final-fit" class="section level2">
+<h2>Fully-iterated final fit</h2>
+<p>To iterate the estimating equation update beyond one step, increase
+<code>max.iter</code>. In the next example the smoothing parameters are
+still tuned using the default fast one-step tuning, but the final
+coefficient estimate is iterated until convergence or until the
+iteration cap is reached.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>fit_full <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>  <span class="at">max.iter =</span> <span class="dv">100</span>,</span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a>  <span class="at">cv =</span> <span class="st">&quot;fastkfold&quot;</span>,</span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a>)</span>
+<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a></span>
+<span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a>fit_full<span class="sc">$</span>n_iter</span>
+<span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a>fit_full<span class="sc">$</span>converged</span></code></pre></div>
+</div>
+<div id="fully-iterated-tuning-and-fully-iterated-final-fit" class="section level2">
+<h2>Fully-iterated tuning and fully-iterated final fit</h2>
+<p>If you also want the cross-validation stage to use the fully-iterated
+fit instead of the one-step approximation, set
+<code>tune.method = &quot;fully-iterated&quot;</code>.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a>fit_full_tuned <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a>  <span class="at">max.iter =</span> <span class="dv">100</span>,</span>
+<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a>  <span class="at">tune.method =</span> <span class="st">&quot;fully-iterated&quot;</span>,</span>
+<span id="cb7-11"><a href="#cb7-11" tabindex="-1"></a>  <span class="at">cv =</span> <span class="st">&quot;fastkfold&quot;</span>,</span>
+<span id="cb7-12"><a href="#cb7-12" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
+<span id="cb7-13"><a href="#cb7-13" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
+<span id="cb7-14"><a href="#cb7-14" tabindex="-1"></a>)</span></code></pre></div>
+</div>
+<div id="gee.fit-false-robust-inference-for-the-initial-pffr-fit-only" class="section level2">
+<h2><code>gee.fit = FALSE</code>: robust inference for the initial
+<code>pffr()</code> fit only</h2>
+<p>Set <code>gee.fit = FALSE</code> when you want to keep the initial
+<code>pffr()</code> mean fit and compute robust inference without
+performing the GEE update. This is useful when you want a direct
+comparison between:</p>
+<ul>
+<li>the initial <code>pffr()</code> fit,</li>
+<li>the one-step fGEE fit, and</li>
+<li>the fully-iterated fGEE fit.</li>
+</ul>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a>fit_pffr_robust <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a>  <span class="at">gee.fit =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a>  <span class="at">max.iter =</span> <span class="dv">1</span>,</span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
+<span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a>)</span></code></pre></div>
+<p>When <code>gee.fit = FALSE</code>, the package does not construct a
+non-independence working covariance for the update step. In practice
+this is the cleanest way to obtain <strong>robust sandwich-based
+inference for the initial <code>pffr()</code> fit only</strong>.</p>
+<p>A direct comparison of the three fits can be made as follows:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a>p_pffr <span class="ot">&lt;-</span> <span class="fu">fgee.plot</span>(</span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>  fit_pffr_robust,</span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>  <span class="at">xlab =</span> <span class="st">&quot;Functional Domain&quot;</span>,</span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a>  <span class="at">title_names =</span> <span class="fu">c</span>(<span class="st">&quot;pffr: Intercept&quot;</span>, <span class="st">&quot;pffr: X1&quot;</span>, <span class="st">&quot;pffr: X2&quot;</span>)</span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a>)</span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a></span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a>p_1step <span class="ot">&lt;-</span> <span class="fu">fgee.plot</span>(</span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a>  fit_1step,</span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a>  <span class="at">xlab =</span> <span class="st">&quot;Functional Domain&quot;</span>,</span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a>  <span class="at">title_names =</span> <span class="fu">c</span>(<span class="st">&quot;One-step: Intercept&quot;</span>, <span class="st">&quot;One-step: X1&quot;</span>, <span class="st">&quot;One-step: X2&quot;</span>)</span>
+<span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a>)</span>
+<span id="cb9-12"><a href="#cb9-12" tabindex="-1"></a></span>
+<span id="cb9-13"><a href="#cb9-13" tabindex="-1"></a>p_full <span class="ot">&lt;-</span> <span class="fu">fgee.plot</span>(</span>
+<span id="cb9-14"><a href="#cb9-14" tabindex="-1"></a>  fit_full,</span>
+<span id="cb9-15"><a href="#cb9-15" tabindex="-1"></a>  <span class="at">xlab =</span> <span class="st">&quot;Functional Domain&quot;</span>,</span>
+<span id="cb9-16"><a href="#cb9-16" tabindex="-1"></a>  <span class="at">title_names =</span> <span class="fu">c</span>(<span class="st">&quot;Fully-iterated: Intercept&quot;</span>, <span class="st">&quot;Fully-iterated: X1&quot;</span>, <span class="st">&quot;Fully-iterated: X2&quot;</span>)</span>
+<span id="cb9-17"><a href="#cb9-17" tabindex="-1"></a>)</span>
+<span id="cb9-18"><a href="#cb9-18" tabindex="-1"></a></span>
+<span id="cb9-19"><a href="#cb9-19" tabindex="-1"></a>gridExtra<span class="sc">::</span><span class="fu">grid.arrange</span>(p_pffr, p_1step, p_full, <span class="at">nrow =</span> <span class="dv">3</span>)</span></code></pre></div>
+</div>
+</div>
+<div id="working-correlation-structures" class="section level1">
+<h1>Working correlation structures</h1>
+<p>The new interface makes the two correlation directions explicit. The
+main combinations are summarized below.</p>
+<table>
+<colgroup>
+<col width="33%" />
+<col width="33%" />
+<col width="33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th><code>corr_long</code></th>
+<th><code>corr_fn</code></th>
+<th>Working covariance interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>&quot;ar1&quot;</code> or <code>&quot;exchangeable&quot;</code></td>
+<td><code>&quot;independence&quot;</code></td>
+<td>Block diagonal in the <strong>longitudinal</strong> direction</td>
+</tr>
+<tr class="even">
+<td><code>&quot;independence&quot;</code></td>
+<td><code>&quot;ar1&quot;</code> or <code>&quot;exchangeable&quot;</code></td>
+<td>Block diagonal in the <strong>functional</strong> direction</td>
+</tr>
+<tr class="odd">
+<td><code>&quot;independence&quot;</code></td>
+<td><code>&quot;fpca&quot;</code></td>
+<td>Block diagonal in the functional direction, with FPCA-based
+functional covariance</td>
+</tr>
+<tr class="even">
+<td>non-independence</td>
+<td>non-independence</td>
+<td>Separable / Kronecker product working covariance</td>
+</tr>
+<tr class="odd">
+<td><code>&quot;ar1&quot;</code> or <code>&quot;exchangeable&quot;</code></td>
+<td><code>&quot;fpca&quot;</code></td>
+<td>Separable / Kronecker working covariance with a longitudinal
+parametric factor and an FPCA-based functional factor</td>
+</tr>
+</tbody>
+</table>
+<div id="block-diagonal-versus-kronecker-product-working-covariance" class="section level2">
+<h2>Block diagonal versus Kronecker product working covariance</h2>
+<p>When exactly one direction is non-independent, the working covariance
+is <strong>block diagonal</strong>. This means the package models
+dependence in only one direction:</p>
+<ul>
+<li><code>corr_long != &quot;independence&quot;</code> and
+<code>corr_fn = &quot;independence&quot;</code> gives a block diagonal covariance
+across longitudinal observations,</li>
+<li><code>corr_long = &quot;independence&quot;</code> and
+<code>corr_fn != &quot;independence&quot;</code> gives a block diagonal covariance
+across functional observations.</li>
+</ul>
+<p>For the parametric block-diagonal cases (<code>&quot;ar1&quot;</code> or
+<code>&quot;exchangeable&quot;</code>), the package estimates a different
+correlation parameter for each block across the other dimension:</p>
+<ul>
+<li>longitudinal block-diagonal fits estimate <code>rho_long(s)</code>
+across the functional domain,</li>
+<li>functional block-diagonal fits estimate <code>rho_fn(t)</code>
+across longitudinal time.</li>
+</ul>
+<p>If <code>rho.smooth = TRUE</code>, those block-specific correlation
+curves are smoothed across the corresponding index.</p>
+<p>When <strong>both</strong> directions are non-independent, the
+package uses a <strong>separable / Kronecker product</strong> working
+covariance. In this case the correlation parameters are pooled and fixed
+within direction:</p>
+<ul>
+<li>one pooled longitudinal correlation parameter (or longitudinal
+factor), and</li>
+<li>one pooled functional correlation parameter (or functional
+factor).</li>
+</ul>
+<p>So the main difference is:</p>
+<ul>
+<li><strong>block diagonal</strong>: correlation varies by block,</li>
+<li><strong>Kronecker / separable</strong>: correlation is fixed within
+direction and shared across blocks.</li>
+</ul>
+<p>For Kronecker fits, each cluster must be observed on a complete
+longitudinal-by-functional grid.</p>
+</div>
+<div id="longitudinal-block-diagonal-example" class="section level2">
+<h2>Longitudinal block-diagonal example</h2>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a>fit_long_block <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;independence&quot;</span>,</span>
+<span id="cb10-9"><a href="#cb10-9" tabindex="-1"></a>  <span class="at">rho.smooth =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb10-10"><a href="#cb10-10" tabindex="-1"></a>  <span class="at">max.iter =</span> <span class="dv">1</span>,</span>
+<span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
+<span id="cb10-12"><a href="#cb10-12" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
+<span id="cb10-13"><a href="#cb10-13" tabindex="-1"></a>)</span></code></pre></div>
+<p>This fit models within-cluster dependence across repeated
+observations, and allows the longitudinal correlation estimate to vary
+over the functional domain.</p>
+</div>
+<div id="functional-block-diagonal-example" class="section level2">
+<h2>Functional block-diagonal example</h2>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>fit_fn_block <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
+<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;independence&quot;</span>,</span>
+<span id="cb11-8"><a href="#cb11-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;exchangeable&quot;</span>,</span>
+<span id="cb11-9"><a href="#cb11-9" tabindex="-1"></a>  <span class="at">rho.smooth =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb11-10"><a href="#cb11-10" tabindex="-1"></a>  <span class="at">max.iter =</span> <span class="dv">1</span>,</span>
+<span id="cb11-11"><a href="#cb11-11" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
+<span id="cb11-12"><a href="#cb11-12" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
+<span id="cb11-13"><a href="#cb11-13" tabindex="-1"></a>)</span></code></pre></div>
+<p>This fit models dependence along the functional domain while treating
+repeated observations as working independent.</p>
+</div>
+<div id="separable-kronecker-example" class="section level2">
+<h2>Separable / Kronecker example</h2>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a>fit_sep <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb12-8"><a href="#cb12-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb12-9"><a href="#cb12-9" tabindex="-1"></a>  <span class="at">max.iter =</span> <span class="dv">1</span>,</span>
+<span id="cb12-10"><a href="#cb12-10" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
+<span id="cb12-11"><a href="#cb12-11" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
+<span id="cb12-12"><a href="#cb12-12" tabindex="-1"></a>)</span></code></pre></div>
+<p>This fit uses a separable working covariance with one longitudinal
+AR1 factor and one functional AR1 factor.</p>
+</div>
+<div id="fpca-based-functional-covariance" class="section level2">
+<h2>FPCA-based functional covariance</h2>
+<p><code>fastFGEE</code> also allows an FPCA-based covariance in the
+functional direction by setting <code>corr_fn = &quot;fpca&quot;</code>.</p>
+<div id="fpca-functional-block-diagonal-fit" class="section level3">
+<h3>FPCA functional block-diagonal fit</h3>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>fit_fpca_block <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;independence&quot;</span>,</span>
+<span id="cb13-8"><a href="#cb13-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;fpca&quot;</span>,</span>
+<span id="cb13-9"><a href="#cb13-9" tabindex="-1"></a>  <span class="at">max.iter =</span> <span class="dv">1</span>,</span>
+<span id="cb13-10"><a href="#cb13-10" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
+<span id="cb13-11"><a href="#cb13-11" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
+<span id="cb13-12"><a href="#cb13-12" tabindex="-1"></a>)</span></code></pre></div>
+<p>Here the longitudinal direction is working independent, and the
+functional blocks are modeled with an FPCA-based covariance
+estimate.</p>
+</div>
+<div id="fpca-plus-longitudinal-correlation-separable-kronecker-fit" class="section level3">
+<h3>FPCA plus longitudinal correlation: separable / Kronecker fit</h3>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a>fit_fpca_sep <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
+<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb14-8"><a href="#cb14-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;fpca&quot;</span>,</span>
+<span id="cb14-9"><a href="#cb14-9" tabindex="-1"></a>  <span class="at">max.iter =</span> <span class="dv">1</span>,</span>
+<span id="cb14-10"><a href="#cb14-10" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
+<span id="cb14-11"><a href="#cb14-11" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
+<span id="cb14-12"><a href="#cb14-12" tabindex="-1"></a>)</span></code></pre></div>
+<p>This combines a parametric longitudinal factor with an FPCA-based
+functional factor in a separable working covariance.</p>
+</div>
+</div>
+</div>
+<div id="supplying-a-pre-fit-refundpffr-object" class="section level1">
+<h1>Supplying a pre-fit <code>refund::pffr()</code> object</h1>
+<p>A useful feature of the package is that you can fit
+<code>refund::pffr()</code> yourself and then pass the fitted object
+through <code>pffr.mod</code>. This is particularly helpful when:</p>
+<ul>
+<li>the functional grid is irregular,</li>
+<li>you want to control the initial <code>pffr()</code> call directly,
+or</li>
+<li>you want to compare the initial fit with the fGEE update.</li>
+</ul>
+<p>The main thing to remember is that <code>pffr.mod</code> supplies the
+aligned long-format response and design matrix, while <code>data</code>
+should still be the original wide data set used to define the cluster
+structure.</p>
+<div id="example-irregular-functional-grid" class="section level2">
+<h2>Example: irregular functional grid</h2>
+<p>The following code shows the workflow using a user-supplied
+<code>pffr()</code> fit.</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="co"># Start from the wide data object used above</span></span>
+<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a>Y_wide <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(dat<span class="sc">$</span>Y)</span>
+<span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a><span class="fu">colnames</span>(Y_wide) <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">&quot;Y_&quot;</span>, <span class="fu">seq_len</span>(<span class="fu">ncol</span>(Y_wide)))</span>
+<span id="cb15-4"><a href="#cb15-4" tabindex="-1"></a></span>
+<span id="cb15-5"><a href="#cb15-5" tabindex="-1"></a>dat_wide <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb15-6"><a href="#cb15-6" tabindex="-1"></a>  <span class="at">ID =</span> dat<span class="sc">$</span>ID,</span>
+<span id="cb15-7"><a href="#cb15-7" tabindex="-1"></a>  <span class="at">X1 =</span> dat<span class="sc">$</span>X1,</span>
+<span id="cb15-8"><a href="#cb15-8" tabindex="-1"></a>  <span class="at">X2 =</span> dat<span class="sc">$</span>X2,</span>
+<span id="cb15-9"><a href="#cb15-9" tabindex="-1"></a>  <span class="at">time =</span> dat<span class="sc">$</span>time,</span>
+<span id="cb15-10"><a href="#cb15-10" tabindex="-1"></a>  Y_wide</span>
+<span id="cb15-11"><a href="#cb15-11" tabindex="-1"></a>)</span>
+<span id="cb15-12"><a href="#cb15-12" tabindex="-1"></a></span>
+<span id="cb15-13"><a href="#cb15-13" tabindex="-1"></a><span class="co"># Convert the matrix outcome to long format</span></span>
+<span id="cb15-14"><a href="#cb15-14" tabindex="-1"></a><span class="co"># (shown here with tidyr for readability)</span></span>
+<span id="cb15-15"><a href="#cb15-15" tabindex="-1"></a>dat_long <span class="ot">&lt;-</span> tidyr<span class="sc">::</span><span class="fu">pivot_longer</span>(</span>
+<span id="cb15-16"><a href="#cb15-16" tabindex="-1"></a>  dat_wide,</span>
+<span id="cb15-17"><a href="#cb15-17" tabindex="-1"></a>  <span class="at">cols =</span> tidyselect<span class="sc">::</span><span class="fu">starts_with</span>(<span class="st">&quot;Y_&quot;</span>),</span>
+<span id="cb15-18"><a href="#cb15-18" tabindex="-1"></a>  <span class="at">names_to =</span> <span class="st">&quot;yindex&quot;</span>,</span>
+<span id="cb15-19"><a href="#cb15-19" tabindex="-1"></a>  <span class="at">names_prefix =</span> <span class="st">&quot;Y_&quot;</span>,</span>
+<span id="cb15-20"><a href="#cb15-20" tabindex="-1"></a>  <span class="at">values_to =</span> <span class="st">&quot;Y&quot;</span>,</span>
+<span id="cb15-21"><a href="#cb15-21" tabindex="-1"></a>  <span class="at">values_drop_na =</span> <span class="cn">FALSE</span></span>
+<span id="cb15-22"><a href="#cb15-22" tabindex="-1"></a>)</span>
+<span id="cb15-23"><a href="#cb15-23" tabindex="-1"></a></span>
+<span id="cb15-24"><a href="#cb15-24" tabindex="-1"></a>dat_long<span class="sc">$</span>yindex <span class="ot">&lt;-</span> <span class="fu">as.integer</span>(dat_long<span class="sc">$</span>yindex)</span>
+<span id="cb15-25"><a href="#cb15-25" tabindex="-1"></a>dat_long<span class="sc">$</span>time <span class="ot">&lt;-</span> <span class="fu">as.numeric</span>(dat_long<span class="sc">$</span>time)</span>
+<span id="cb15-26"><a href="#cb15-26" tabindex="-1"></a></span>
+<span id="cb15-27"><a href="#cb15-27" tabindex="-1"></a><span class="co"># Construct the ydata object expected by refund::pffr()</span></span>
+<span id="cb15-28"><a href="#cb15-28" tabindex="-1"></a>Y.mat <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb15-29"><a href="#cb15-29" tabindex="-1"></a>  <span class="at">.obs =</span> <span class="fu">seq_len</span>(<span class="fu">nrow</span>(dat_long)),</span>
+<span id="cb15-30"><a href="#cb15-30" tabindex="-1"></a>  <span class="at">.index =</span> dat_long<span class="sc">$</span>yindex,</span>
+<span id="cb15-31"><a href="#cb15-31" tabindex="-1"></a>  <span class="at">.value =</span> dat_long<span class="sc">$</span>Y</span>
+<span id="cb15-32"><a href="#cb15-32" tabindex="-1"></a>)</span>
+<span id="cb15-33"><a href="#cb15-33" tabindex="-1"></a></span>
+<span id="cb15-34"><a href="#cb15-34" tabindex="-1"></a>fit_pffr <span class="ot">&lt;-</span> refund<span class="sc">::</span><span class="fu">pffr</span>(</span>
+<span id="cb15-35"><a href="#cb15-35" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb15-36"><a href="#cb15-36" tabindex="-1"></a>  <span class="at">algorithm =</span> <span class="st">&quot;bam&quot;</span>,</span>
+<span id="cb15-37"><a href="#cb15-37" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(),</span>
+<span id="cb15-38"><a href="#cb15-38" tabindex="-1"></a>  <span class="at">discrete =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb15-39"><a href="#cb15-39" tabindex="-1"></a>  <span class="at">yind =</span> Y.mat<span class="sc">$</span>.index,</span>
+<span id="cb15-40"><a href="#cb15-40" tabindex="-1"></a>  <span class="at">ydata =</span> Y.mat,</span>
+<span id="cb15-41"><a href="#cb15-41" tabindex="-1"></a>  <span class="at">bs.yindex =</span> <span class="fu">list</span>(<span class="at">bs =</span> <span class="st">&quot;bs&quot;</span>, <span class="at">k =</span> <span class="dv">11</span>),</span>
+<span id="cb15-42"><a href="#cb15-42" tabindex="-1"></a>  <span class="at">data =</span> dat_long</span>
+<span id="cb15-43"><a href="#cb15-43" tabindex="-1"></a>)</span></code></pre></div>
+<p>Now update that initial fit with <code>fgee()</code>. Notice that
+<code>pffr.mod</code> receives the fitted <code>pffr()</code> object,
+but <code>data</code> is still the original wide data frame.</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>fit_from_pffr <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a>  <span class="at">pffr.mod =</span> fit_pffr,</span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
+<span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb16-8"><a href="#cb16-8" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;exchangeable&quot;</span>,</span>
+<span id="cb16-9"><a href="#cb16-9" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;independence&quot;</span>,</span>
+<span id="cb16-10"><a href="#cb16-10" tabindex="-1"></a>  <span class="at">max.iter =</span> <span class="dv">1</span>,</span>
+<span id="cb16-11"><a href="#cb16-11" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
+<span id="cb16-12"><a href="#cb16-12" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
+<span id="cb16-13"><a href="#cb16-13" tabindex="-1"></a>)</span>
+<span id="cb16-14"><a href="#cb16-14" tabindex="-1"></a></span>
+<span id="cb16-15"><a href="#cb16-15" tabindex="-1"></a><span class="fu">fgee.plot</span>(fit_from_pffr)</span></code></pre></div>
+</div>
+</div>
+<div id="variance-estimators-and-confidence-intervals" class="section level1">
+<h1>Variance estimators and confidence intervals</h1>
+<p>The variance estimator and the joint confidence interval construction
+are controlled separately.</p>
+<ul>
+<li><code>var.type</code> chooses the covariance estimator for the
+coefficient vector,</li>
+<li><code>joint.CI</code> chooses how the joint critical values are
+obtained.</li>
+</ul>
+<p>Common choices are:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a><span class="co"># Sandwich variance + wild-bootstrap critical values</span></span>
+<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a>fit_sw <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb17-5"><a href="#cb17-5" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb17-6"><a href="#cb17-6" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
+<span id="cb17-7"><a href="#cb17-7" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb17-8"><a href="#cb17-8" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb17-9"><a href="#cb17-9" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb17-10"><a href="#cb17-10" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span>,</span>
+<span id="cb17-11"><a href="#cb17-11" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span></span>
+<span id="cb17-12"><a href="#cb17-12" tabindex="-1"></a>)</span>
+<span id="cb17-13"><a href="#cb17-13" tabindex="-1"></a></span>
+<span id="cb17-14"><a href="#cb17-14" tabindex="-1"></a><span class="co"># Fast cluster bootstrap variance + wild-bootstrap critical values</span></span>
+<span id="cb17-15"><a href="#cb17-15" tabindex="-1"></a>fit_fb <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb17-16"><a href="#cb17-16" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb17-17"><a href="#cb17-17" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb17-18"><a href="#cb17-18" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb17-19"><a href="#cb17-19" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
+<span id="cb17-20"><a href="#cb17-20" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb17-21"><a href="#cb17-21" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb17-22"><a href="#cb17-22" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb17-23"><a href="#cb17-23" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;fastboot&quot;</span>,</span>
+<span id="cb17-24"><a href="#cb17-24" tabindex="-1"></a>  <span class="at">boot.samps =</span> <span class="dv">2000</span>,</span>
+<span id="cb17-25"><a href="#cb17-25" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span></span>
+<span id="cb17-26"><a href="#cb17-26" tabindex="-1"></a>)</span>
+<span id="cb17-27"><a href="#cb17-27" tabindex="-1"></a></span>
+<span id="cb17-28"><a href="#cb17-28" tabindex="-1"></a><span class="co"># Sandwich variance + parametric joint critical values</span></span>
+<span id="cb17-29"><a href="#cb17-29" tabindex="-1"></a>fit_param <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb17-30"><a href="#cb17-30" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb17-31"><a href="#cb17-31" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb17-32"><a href="#cb17-32" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb17-33"><a href="#cb17-33" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
+<span id="cb17-34"><a href="#cb17-34" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb17-35"><a href="#cb17-35" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb17-36"><a href="#cb17-36" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb17-37"><a href="#cb17-37" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span>,</span>
+<span id="cb17-38"><a href="#cb17-38" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;parametric&quot;</span></span>
+<span id="cb17-39"><a href="#cb17-39" tabindex="-1"></a>)</span></code></pre></div>
+<p>A practical default for many applications is
+<code>var.type = &quot;sandwich&quot;</code> with <code>joint.CI = &quot;wild&quot;</code>.
+This is also the most direct setting when comparing
+<code>gee.fit = FALSE</code>, one-step, and fully-iterated fits.</p>
+</div>
+<div id="gaussian-exact-mode" class="section level1">
+<h1>Gaussian exact mode</h1>
+<p>For Gaussian responses with the identity link,
+<code>exact = TRUE</code> uses the exact penalized GLS-style update
+instead of the approximate one-step update. For non-Gaussian families,
+<code>exact = TRUE</code> is ignored.</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a>fit_gaussian_exact <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb18-4"><a href="#cb18-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb18-5"><a href="#cb18-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;gaussian&quot;</span>,</span>
+<span id="cb18-6"><a href="#cb18-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb18-7"><a href="#cb18-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb18-8"><a href="#cb18-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb18-9"><a href="#cb18-9" tabindex="-1"></a>  <span class="at">exact =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb18-10"><a href="#cb18-10" tabindex="-1"></a>  <span class="at">max.iter =</span> <span class="dv">1</span>,</span>
+<span id="cb18-11"><a href="#cb18-11" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
+<span id="cb18-12"><a href="#cb18-12" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
+<span id="cb18-13"><a href="#cb18-13" tabindex="-1"></a>)</span></code></pre></div>
+</div>
+<div id="notes-on-the-updated-interface" class="section level1">
+<h1>Notes on the updated interface</h1>
+<p>Compared with the older vignette, the main argument changes are:</p>
+<ul>
+<li><code>cov.type</code> is replaced by <code>corr_long</code> and
+<code>corr_fn</code>,</li>
+<li><code>sandwich</code> is replaced by <code>var.type</code>,</li>
+<li><code>max.iter</code> now explicitly controls one-step versus
+fully-iterated fitting,</li>
+<li><code>gee.fit = FALSE</code> gives robust inference for the initial
+<code>pffr()</code> fit,</li>
+<li><code>pffr.mod</code> is the supported way to pass in a pre-fit
+<code>refund::pffr()</code> object.</li>
+</ul>
+<p>In most analyses, the current recommended pattern is:</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb19-2"><a href="#cb19-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb19-3"><a href="#cb19-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb19-4"><a href="#cb19-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb19-5"><a href="#cb19-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
+<span id="cb19-6"><a href="#cb19-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb19-7"><a href="#cb19-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb19-8"><a href="#cb19-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb19-9"><a href="#cb19-9" tabindex="-1"></a>  <span class="at">max.iter =</span> <span class="dv">1</span>,</span>
+<span id="cb19-10"><a href="#cb19-10" tabindex="-1"></a>  <span class="at">cv =</span> <span class="st">&quot;fastkfold&quot;</span>,</span>
+<span id="cb19-11"><a href="#cb19-11" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
+<span id="cb19-12"><a href="#cb19-12" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
+<span id="cb19-13"><a href="#cb19-13" tabindex="-1"></a>)</span></code></pre></div>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
