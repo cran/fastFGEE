@@ -6,20 +6,11 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>", warning = FALSE, message 
 library(fastFGEE)
 
 ## ----eval = FALSE-------------------------------------------------------------
-# dat_path <- system.file("data", "binary_ar1_data", package = "fastFGEE")
-# if (dat_path == "") {
-#   dat_path <- "binary_ar1_data"
-# }
-# dat0 <- readRDS(dat_path)
+# install.packages("SuperGauss")
 
 ## ----eval = FALSE-------------------------------------------------------------
-# dat <- data.frame(
-#   Y = I(dat0$Y),
-#   X1 = dat0$X1,
-#   X2 = dat0$X2,
-#   ID = dat0$ID,
-#   time = dat0$time
-# )
+# data("d", package = "fastFGEE")
+# dat <- d
 # 
 # head(as.matrix(dat$Y)[, 1:4])
 # head(dat[c("ID", "X1", "X2", "time")])
@@ -34,7 +25,6 @@ library(fastFGEE)
 #   corr_long = "ar1",
 #   corr_fn = "independence",
 #   rho.smooth = TRUE,
-#   max.iter = 1,
 #   cv = "fastkfold",
 #   joint.CI = "wild",
 #   var.type = "sandwich"
@@ -51,79 +41,45 @@ library(fastFGEE)
 #   time = "time",
 #   corr_long = "ar1",
 #   corr_fn = "ar1",
-#   max.iter = 1,
 #   cv = "fastkfold",
 #   joint.CI = "wild",
 #   var.type = "sandwich"
 # )
 
 ## ----eval = FALSE-------------------------------------------------------------
-# fit_full <- fgee(
-#   formula = Y ~ X1 + X2,
-#   data = dat,
-#   cluster = "ID",
-#   family = "binomial",
-#   time = "time",
-#   corr_long = "ar1",
-#   corr_fn = "ar1",
-#   max.iter = 100,
-#   cv = "fastkfold",
-#   joint.CI = "wild",
-#   var.type = "sandwich"
+# fit_nb <- fgee(
+#   formula = Y ~ X1 + X2, data = dat, cluster = "ID",
+#   family = mgcv::nb(),                 # or mgcv::nb(theta = 3) to fix it
+#   time = "time", corr_long = "exchangeable", corr_fn = "ar1"
 # )
 # 
-# fit_full$n_iter
-# fit_full$converged
-
-## ----eval = FALSE-------------------------------------------------------------
-# fit_full_tuned <- fgee(
-#   formula = Y ~ X1 + X2,
-#   data = dat,
-#   cluster = "ID",
-#   family = "binomial",
-#   time = "time",
-#   corr_long = "ar1",
-#   corr_fn = "ar1",
-#   max.iter = 100,
-#   tune.method = "fully-iterated",
-#   cv = "fastkfold",
-#   joint.CI = "wild",
-#   var.type = "sandwich"
+# fit_beta <- fgee(
+#   formula = Y ~ X1 + X2, data = dat, cluster = "ID",
+#   family = mgcv::betar(),
+#   time = "time", corr_long = "exchangeable", corr_fn = "ar1"
 # )
 
 ## ----eval = FALSE-------------------------------------------------------------
-# fit_pffr_robust <- fgee(
-#   formula = Y ~ X1 + X2,
-#   data = dat,
-#   cluster = "ID",
-#   family = "binomial",
-#   time = "time",
-#   gee.fit = FALSE,
-#   max.iter = 1,
-#   joint.CI = "wild",
-#   var.type = "sandwich"
+# fit_prev <- fgee(
+#   formula = Y ~ X1 + X2, data = dat, cluster = "ID",
+#   family = binomial(), time = "time",
+#   corr_long = "exchangeable", corr_fn = "ar1",
+#   sp.method = "fastk_grad"
 # )
 
 ## ----eval = FALSE-------------------------------------------------------------
-# p_pffr <- fgee.plot(
-#   fit_pffr_robust,
-#   xlab = "Functional Domain",
-#   title_names = c("pffr: Intercept", "pffr: X1", "pffr: X2")
+# fit_no_kernel <- fgee(
+#   formula = Y ~ X1 + X2, data = dat, cluster = "ID",
+#   family = binomial(), time = "time",
+#   corr_long = "exchangeable", corr_fn = "ar1",
+#   fastk.kernel = FALSE
 # )
 # 
-# p_1step <- fgee.plot(
-#   fit_1step,
-#   xlab = "Functional Domain",
-#   title_names = c("One-step: Intercept", "One-step: X1", "One-step: X2")
-# )
-# 
-# p_full <- fgee.plot(
-#   fit_full,
-#   xlab = "Functional Domain",
-#   title_names = c("Fully-iterated: Intercept", "Fully-iterated: X1", "Fully-iterated: X2")
-# )
-# 
-# gridExtra::grid.arrange(p_pffr, p_1step, p_full, nrow = 3)
+# # or for the whole session
+# options(fastFGEE.kernel = FALSE)
+
+## ----eval = FALSE-------------------------------------------------------------
+# options(fastFGEE.corr.kernel = FALSE)
 
 ## ----eval = FALSE-------------------------------------------------------------
 # fit_long_block <- fgee(
@@ -135,7 +91,6 @@ library(fastFGEE)
 #   corr_long = "ar1",
 #   corr_fn = "independence",
 #   rho.smooth = TRUE,
-#   max.iter = 1,
 #   joint.CI = "wild",
 #   var.type = "sandwich"
 # )
@@ -150,7 +105,6 @@ library(fastFGEE)
 #   corr_long = "independence",
 #   corr_fn = "exchangeable",
 #   rho.smooth = TRUE,
-#   max.iter = 1,
 #   joint.CI = "wild",
 #   var.type = "sandwich"
 # )
@@ -164,7 +118,6 @@ library(fastFGEE)
 #   time = "time",
 #   corr_long = "ar1",
 #   corr_fn = "ar1",
-#   max.iter = 1,
 #   joint.CI = "wild",
 #   var.type = "sandwich"
 # )
@@ -178,7 +131,6 @@ library(fastFGEE)
 #   time = "time",
 #   corr_long = "independence",
 #   corr_fn = "fpca",
-#   max.iter = 1,
 #   joint.CI = "wild",
 #   var.type = "sandwich"
 # )
@@ -192,7 +144,6 @@ library(fastFGEE)
 #   time = "time",
 #   corr_long = "ar1",
 #   corr_fn = "fpca",
-#   max.iter = 1,
 #   joint.CI = "wild",
 #   var.type = "sandwich"
 # )
@@ -252,7 +203,6 @@ library(fastFGEE)
 #   time = "time",
 #   corr_long = "exchangeable",
 #   corr_fn = "independence",
-#   max.iter = 1,
 #   joint.CI = "wild",
 #   var.type = "sandwich"
 # )
@@ -260,7 +210,7 @@ library(fastFGEE)
 # fgee.plot(fit_from_pffr)
 
 ## ----eval = FALSE-------------------------------------------------------------
-# # Sandwich variance + wild-bootstrap critical values
+# # Sandwich covariance with studentized wild-cluster calibration
 # fit_sw <- fgee(
 #   formula = Y ~ X1 + X2,
 #   data = dat,
@@ -273,7 +223,7 @@ library(fastFGEE)
 #   joint.CI = "wild"
 # )
 # 
-# # Fast cluster bootstrap variance + wild-bootstrap critical values
+# # Fast cluster-bootstrap covariance with the same wild calibration
 # fit_fb <- fgee(
 #   formula = Y ~ X1 + X2,
 #   data = dat,
@@ -286,47 +236,32 @@ library(fastFGEE)
 #   boot.samps = 2000,
 #   joint.CI = "wild"
 # )
-# 
-# # Sandwich variance + parametric joint critical values
-# fit_param <- fgee(
-#   formula = Y ~ X1 + X2,
-#   data = dat,
-#   cluster = "ID",
-#   family = "binomial",
-#   time = "time",
-#   corr_long = "ar1",
-#   corr_fn = "ar1",
-#   var.type = "sandwich",
-#   joint.CI = "parametric"
-# )
-
-## ----eval = FALSE-------------------------------------------------------------
-# fit_gaussian_exact <- fgee(
-#   formula = Y ~ X1 + X2,
-#   data = dat,
-#   cluster = "ID",
-#   family = "gaussian",
-#   time = "time",
-#   corr_long = "ar1",
-#   corr_fn = "ar1",
-#   exact = TRUE,
-#   max.iter = 1,
-#   joint.CI = "wild",
-#   var.type = "sandwich"
-# )
 
 ## ----eval = FALSE-------------------------------------------------------------
 # fit <- fgee(
-#   formula = Y ~ X1 + X2,
+#   Y ~ X1 + X2,
 #   data = dat,
 #   cluster = "ID",
-#   family = "binomial",
+#   family = binomial(link = "logit"),
 #   time = "time",
-#   corr_long = "ar1",
+#   corr_long = "exchangeable",
 #   corr_fn = "ar1",
-#   max.iter = 1,
-#   cv = "fastkfold",
-#   joint.CI = "wild",
-#   var.type = "sandwich"
+#   sp.method = "auto",
+#   working.retain = "auto",
+#   corr.solver = "auto"
+# )
+
+## ----eval = FALSE-------------------------------------------------------------
+# fit_small <- fgee(
+#   Y ~ X1 + X2,
+#   data = dat,
+#   cluster = "ID",
+#   family = gaussian(),
+#   time = "time",
+#   joint.CI = FALSE,
+#   sp.method = "sandwich_qreml",
+#   keep.data = FALSE,
+#   keep.initial.fit = FALSE,
+#   keep.working.stats = FALSE
 # )
 
