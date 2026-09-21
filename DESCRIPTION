@@ -1,7 +1,7 @@
 Package: fastFGEE
 Title: Fast Functional Generalized Estimating Equations via a One-Step
         Estimator
-Version: 0.2.0
+Version: 0.2.2
 Authors@R: 
     person("Gabriel", "Loewinger", email = "gloewinger@gmail.com",
            role = c("aut", "cre"),
@@ -38,9 +38,9 @@ BugReports: https://github.com/gloewing/fastFGEE/issues
 LinkingTo: Rcpp
 NeedsCompilation: yes
 Config/testthat/edition: 3
-Packaged: 2026-09-15 00:26:44 UTC; loewingergc
+Packaged: 2026-09-18 18:57:42 UTC; loewingergc
 Author: Gabriel Loewinger [aut, cre] (ORCID:
     <https://orcid.org/0000-0002-0755-8520>)
 Maintainer: Gabriel Loewinger <gloewinger@gmail.com>
 Repository: CRAN
-Date/Publication: 2026-09-15 11:00:23 UTC
+Date/Publication: 2026-09-21 10:10:02 UTC

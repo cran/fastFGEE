@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gabriel Loewinger" />
 
-<meta name="date" content="2026-09-14" />
+<meta name="date" content="2026-09-18" />
 
 <title>fastFGEE: Functional Generalized Estimating Equations</title>
 
@@ -342,342 +342,151 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <h1 class="title toc-ignore">fastFGEE: Functional Generalized Estimating
 Equations</h1>
 <h4 class="author">Gabriel Loewinger</h4>
-<h4 class="date">2026-09-14</h4>
+<h4 class="date">2026-09-18</h4>
 
 
 
-<!-- Suggested package location: vignettes/fastFGEE.Rmd -->
 <div id="installation" class="section level1">
 <h1>Installation</h1>
-<p>The development version of <code>fastFGEE</code> can be installed
-with:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a>remotes<span class="sc">::</span><span class="fu">install_github</span>(<span class="st">&quot;gloewing/fastFGEE&quot;</span>, <span class="at">build_vignettes =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
-<div id="numerical-dependencies" class="section level2">
-<h2>Numerical dependencies</h2>
-<p>The default correlation solver handles regular-grid AR(1) and
-exchangeable working correlation directly. <code>SuperGauss</code> is
-suggested rather than required and is used only when
-<code>corr.solver = &quot;supergauss&quot;</code> is requested explicitly:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">install.packages</span>(<span class="st">&quot;SuperGauss&quot;</span>)</span></code></pre></div>
-<p>Irregularly sampled continuous-time AR(1) correlations use an exact
-tridiagonal Markov precision implemented inside <code>fastFGEE</code>
-from the formulas of Allevius (2018). Symmetric positive-definite
-coefficient-space solves use registered Rcpp/LAPACK routines. The
-archived <code>irregulAR1</code> and <code>sanic</code> packages are no
-longer dependencies.</p>
+<p>Install the CRAN release with:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">install.packages</span>(<span class="st">&quot;fastFGEE&quot;</span>)</span></code></pre></div>
+<p>The development version can be installed from GitHub:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>remotes<span class="sc">::</span><span class="fu">install_github</span>(<span class="st">&quot;gloewing/fastFGEE&quot;</span>, <span class="at">build_vignettes =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
 </div>
-</div>
-<div id="introduction" class="section level1">
-<h1>Introduction</h1>
-<p><code>fastFGEE</code> fits functional generalized estimating
-equations for longitudinal functional outcomes. The public workflow
-is:</p>
-<ol style="list-style-type: decimal">
-<li>fit or accept an initial function-on-scalar regression from
-<code>refund::pffr()</code>,</li>
-<li>estimate a working correlation from the initial residuals,</li>
-<li>choose smoothing parameters by fast cluster cross-validation,
-and</li>
-<li>perform one penalized fGEE update followed by robust inference.</li>
-</ol>
-<p>The public interface exposes only the validated one-step estimator.
-Historical exact-GLS, pffr-only, legacy-engine, and fully iterated
-implementations remain unexported for regression testing and future
-method development. Arguments such as <code>exact</code>,
-<code>gee.fit</code>, <code>max.iter</code>, <code>tune.method</code>,
-and <code>working.engine</code> are not accepted by
-<code>fgee()</code>.</p>
-<p>The working-correlation directions are specified separately:
-<code>corr_long</code> acts across repeated observations within a
-cluster and <code>corr_fn</code> acts along the functional domain. The
-older <code>cov.type</code> interface is replaced by these two
-arguments, and the older <code>sandwich</code> argument is replaced by
-<code>var.type</code>.</p>
-</div>
-<div id="loading-example-data" class="section level1">
-<h1>Loading example data</h1>
-<p>The package includes a simulated longitudinal functional dataset
-named <code>d</code>. The response is stored as an <code>AsIs</code>
-matrix column on a common functional grid:</p>
+<div id="quick-start" class="section level1">
+<h1>Quick start</h1>
+<p><code>fastFGEE</code> fits marginal regression models for
+longitudinal functional outcomes. Each row of the input data is one
+repeated observation, while the response is a curve stored in a
+matrix-valued column.</p>
+<div id="loading-example-data" class="section level2">
+<h2>Loading example data</h2>
+<p>The package includes a small simulated binary dataset,
+<code>d</code>.</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">data</span>(<span class="st">&quot;d&quot;</span>, <span class="at">package =</span> <span class="st">&quot;fastFGEE&quot;</span>)</span>
 <span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>dat <span class="ot">&lt;-</span> d</span>
-<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a></span>
-<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="fu">head</span>(<span class="fu">as.matrix</span>(dat<span class="sc">$</span>Y)[, <span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>])</span>
-<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a><span class="fu">head</span>(dat[<span class="fu">c</span>(<span class="st">&quot;ID&quot;</span>, <span class="st">&quot;X1&quot;</span>, <span class="st">&quot;X2&quot;</span>, <span class="st">&quot;time&quot;</span>)])</span></code></pre></div>
-<p>Each row is one longitudinal observation. <code>ID</code> identifies
-the independent cluster, <code>time</code> orders repeated observations,
-and <code>Y</code> contains the functional outcome evaluated on its
-grid.</p>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>Y <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(dat<span class="sc">$</span>Y)</span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a><span class="fu">c</span>(</span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>  <span class="at">rows =</span> <span class="fu">nrow</span>(dat),</span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a>  <span class="at">clusters =</span> <span class="fu">length</span>(<span class="fu">unique</span>(dat<span class="sc">$</span>ID)),</span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a>  <span class="at">functional_grid_points =</span> <span class="fu">ncol</span>(Y)</span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a>)</span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a><span class="co">#&gt;                   rows               clusters functional_grid_points </span></span>
+<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a><span class="co">#&gt;                    300                     30                    100</span></span>
+<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a></span>
+<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a><span class="fu">head</span>(dat[<span class="fu">c</span>(<span class="st">&quot;ID&quot;</span>, <span class="st">&quot;X1&quot;</span>, <span class="st">&quot;X2&quot;</span>, <span class="st">&quot;time&quot;</span>)])</span>
+<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a><span class="co">#&gt;   ID        X1         X2 time</span></span>
+<span id="cb3-15"><a href="#cb3-15" tabindex="-1"></a><span class="co">#&gt; 1  1 0.2199248 -1.2810522    1</span></span>
+<span id="cb3-16"><a href="#cb3-16" tabindex="-1"></a><span class="co">#&gt; 2  1 0.2199248 -3.6745461    2</span></span>
+<span id="cb3-17"><a href="#cb3-17" tabindex="-1"></a><span class="co">#&gt; 3  1 0.2199248 -3.0682195    3</span></span>
+<span id="cb3-18"><a href="#cb3-18" tabindex="-1"></a><span class="co">#&gt; 4  1 0.2199248 -1.3994682    4</span></span>
+<span id="cb3-19"><a href="#cb3-19" tabindex="-1"></a><span class="co">#&gt; 5  1 0.2199248 -0.8282399    5</span></span>
+<span id="cb3-20"><a href="#cb3-20" tabindex="-1"></a><span class="co">#&gt; 6  1 0.2199248 -0.4335023    6</span></span>
+<span id="cb3-21"><a href="#cb3-21" tabindex="-1"></a><span class="fu">head</span>(Y[, <span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>])</span>
+<span id="cb3-22"><a href="#cb3-22" tabindex="-1"></a><span class="co">#&gt;      Y_1 Y_2 Y_3 Y_4</span></span>
+<span id="cb3-23"><a href="#cb3-23" tabindex="-1"></a><span class="co">#&gt; [1,]   1   0   1   1</span></span>
+<span id="cb3-24"><a href="#cb3-24" tabindex="-1"></a><span class="co">#&gt; [2,]   1   1   1   1</span></span>
+<span id="cb3-25"><a href="#cb3-25" tabindex="-1"></a><span class="co">#&gt; [3,]   0   1   0   1</span></span>
+<span id="cb3-26"><a href="#cb3-26" tabindex="-1"></a><span class="co">#&gt; [4,]   1   1   1   1</span></span>
+<span id="cb3-27"><a href="#cb3-27" tabindex="-1"></a><span class="co">#&gt; [5,]   0   1   1   1</span></span>
+<span id="cb3-28"><a href="#cb3-28" tabindex="-1"></a><span class="co">#&gt; [6,]   1   1   1   1</span></span></code></pre></div>
+<p><code>ID</code> identifies independent clusters, <code>time</code>
+orders repeated observations, and <code>Y</code> contains the functional
+response on a common grid. Scalar predictors can be cluster-level or
+observation-level variables.</p>
 </div>
-<div id="a-basic-one-step-fit" class="section level1">
-<h1>A basic one-step fit</h1>
-<p>The simplest current pattern is to specify <code>corr_long</code> and
-<code>corr_fn</code> directly. For example, the following fits a
-one-step fGEE with AR1 correlation in the longitudinal direction and
-independence along the functional domain:</p>
+<div id="fit-a-one-step-fgee" class="section level2">
+<h2>Fit a one-step fGEE</h2>
+<p>A typical fit specifies the mean model, cluster variable, response
+family, and working correlation in the longitudinal and functional
+directions.</p>
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>fit_1step <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
 <span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
 <span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
 <span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
-<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(<span class="at">link =</span> <span class="st">&quot;logit&quot;</span>),</span>
 <span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
 <span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>,</span>
-<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;independence&quot;</span>,</span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;independent&quot;</span>,</span>
 <span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a>  <span class="at">rho.smooth =</span> <span class="cn">TRUE</span>,</span>
-<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a>  <span class="at">cv =</span> <span class="st">&quot;fastkfold&quot;</span>,</span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span>,</span>
 <span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
-<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
-<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a>)</span>
-<span id="cb4-14"><a href="#cb4-14" tabindex="-1"></a></span>
-<span id="cb4-15"><a href="#cb4-15" tabindex="-1"></a><span class="fu">fgee.plot</span>(fit_1step)</span></code></pre></div>
-<p>The plotting method uses the fitted confidence intervals returned by
-<code>fgee()</code> and produces coefficient-function plots for the
-intercept and covariate effects.</p>
+<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a>  <span class="at">verbose.tuning =</span> <span class="cn">FALSE</span></span>
+<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a>)</span></code></pre></div>
+<p>The selected tuning method and smoothing parameters are stored in the
+fitted object:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>fit_1step<span class="sc">$</span>sp.method</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="co">#&gt; [1] &quot;fastk_grad_fast&quot;</span></span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a>fit_1step<span class="sc">$</span>lambda</span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="co">#&gt; [1]  3.466562  2.923348 15.437922</span></span></code></pre></div>
+<p>All public <code>fgee()</code> fits use the one-step estimator. There
+is no iteration setting to choose for the final coefficient fit.</p>
 </div>
-<div id="the-supported-one-step-fit" class="section level1">
-<h1>The supported one-step fit</h1>
-<p>Every public <code>fgee()</code> call performs one coefficient
-update. This is the fast estimator described in the paper. There is no
-user switch between one-step, exact, pffr-only, or fully iterated
-estimators in this development version.</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>fit_1step <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
-<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
-<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
-<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
-<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
-<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
-<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>,</span>
-<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span>,</span>
-<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a>  <span class="at">cv =</span> <span class="st">&quot;fastkfold&quot;</span>,</span>
-<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
-<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
-<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a>)</span></code></pre></div>
-<p>A pre-fitted <code>refund::pffr()</code> model can still be supplied
-through <code>pffr.mod</code>; that changes only the initial estimator,
-not the one-step nature of the public fit. Internal historical paths are
-retained so package tests can continue to compare the optimized engine
-with the original implementation.</p>
+<div id="plot-the-coefficient-functions" class="section level2">
+<h2>Plot the coefficient functions</h2>
+<p><code>fgee.plot()</code> plots the estimated functional coefficients.
+When interval estimates are available, the plot also shows the pointwise
+intervals and the simultaneous whole-curve band.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">fgee.plot</span>(</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>  fit_1step,</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>  <span class="at">xlab =</span> <span class="st">&quot;Functional domain&quot;</span>,</span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>  <span class="at">title_names =</span> <span class="fu">c</span>(<span class="st">&quot;Intercept&quot;</span>, <span class="st">&quot;X1&quot;</span>, <span class="st">&quot;X2&quot;</span>)</span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a>)</span></code></pre></div>
+<p><img role="img" aria-label src="data:image/png;base64,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" alt width="100%" style="display: block; margin: auto;" /></p>
+<p>The plotting data can also be returned for custom figures:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a>plot_data <span class="ot">&lt;-</span> <span class="fu">fgee.plot</span>(fit_1step, <span class="at">return =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="fu">head</span>(plot_data[[<span class="dv">1</span>]])</span></code></pre></div>
 </div>
-<div id="smoothing-parameter-selection" class="section level1">
-<h1>Smoothing-parameter selection</h1>
-<p>By default, and for every fastK selector, <code>fgee()</code> chooses
-smoothing parameters by minimising the exact fast <span class="math inline">\(K\)</span>-fold cross-validation criterion. The
-<code>sp.method</code> argument selects the search strategy.
-<code>&quot;sandwich_qreml&quot;</code> is a separate explicit opt-in working
-restricted quasi-likelihood criterion rather than a cross-validation
-method; <code>&quot;auto&quot;</code> does not select it.</p>
-<div id="what-auto-does" class="section level2">
-<h2>What <code>&quot;auto&quot;</code> does</h2>
-<p>For Gaussian identity-link models, <code>&quot;auto&quot;</code> uses
-<code>&quot;fastk_staged&quot;</code>. The exact held-out Gaussian loss can be
-written in terms of per-fold coefficient-space sufficient statistics, so
-once those are built the objective no longer depends on the number of
-functional observations. Tuning takes about the same time whether the
-data have <span class="math inline">\(10^5\)</span> or <span class="math inline">\(2 \times 10^7\)</span> scalar observations.</p>
-<p>For supported non-Gaussian families – binomial with a logit link,
-Poisson, Gamma and negative binomial with a log link, and beta
-regression with a logit link – <code>&quot;auto&quot;</code> uses
-<code>&quot;fastk_grad_fast&quot;</code>. There is no finite sufficient-statistic
-reduction for the exact non-Gaussian held-out loss, so every objective
-evaluation touches the data and the cost of tuning is dominated by how
-many evaluations the search needs.</p>
 </div>
-<div id="negative-binomial-and-beta-need-their-nuisance-parameter" class="section level2">
-<h2>Negative binomial and beta need their nuisance parameter</h2>
-<p>Gamma is the easy case: its dispersion enters the log-likelihood
-multiplicatively, plus terms free of the linear predictor, so it cancels
-out of the criterion and Gamma tuning never needed it. Negative binomial
-and beta are different – theta appears as <span class="math inline">\(\theta(\mu - y)/(\mu + \theta)\)</span> and the
-precision inside <span class="math inline">\(\psi(\mu\phi)\)</span> – so
-the criterion cannot be evaluated without a value.</p>
-<p>The value used is the one that formed the working variance, not a
-fresh estimate. That is a correctness requirement rather than a
-convenience: the held-out loss scores per-fold coefficients that were
-themselves computed from <span class="math inline">\(\bar W\)</span> and
-<span class="math inline">\(\bar d\)</span> under that variance, so
-evaluating them under a different nuisance would no longer be a held-out
-predictive loss for the model being fitted.</p>
-<p>Practically, that means supplying it through the family so it
-survives into the initial fit:</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>fit_nb <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
-<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2, <span class="at">data =</span> dat, <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
-<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>  <span class="at">family =</span> mgcv<span class="sc">::</span><span class="fu">nb</span>(),                 <span class="co"># or mgcv::nb(theta = 3) to fix it</span></span>
-<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>, <span class="at">corr_long =</span> <span class="st">&quot;exchangeable&quot;</span>, <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span></span>
-<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a>)</span>
-<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a></span>
-<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a>fit_beta <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
-<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2, <span class="at">data =</span> dat, <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
-<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>  <span class="at">family =</span> mgcv<span class="sc">::</span><span class="fu">betar</span>(),</span>
-<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>, <span class="at">corr_long =</span> <span class="st">&quot;exchangeable&quot;</span>, <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span></span>
-<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a>)</span></code></pre></div>
-<p><code>MASS::negative.binomial()</code> will not work:
-<code>mgcv</code> rejects a plain family object that lacks variance
-derivatives, inside <code>refund::pffr()</code>, before any fastFGEE
-code runs. <code>mgcv::nb(theta = )</code> is the way to fix theta.</p>
-<p>One caveat to carry. Whatever <code>mgcv::nb()</code> or
-<code>mgcv::betar()</code> reports is estimated by REML under an
-<strong>independence</strong> likelihood, which is misspecified for
-correlated functional data, and a flexible smoother can absorb
-variability that would otherwise appear as overdispersion. The package
-therefore records which nuisance value was used and updates it only at
-the designated final working-state calculation; it does not re-estimate
-the nuisance parameter for every candidate smoothing vector.</p>
-<p>Dedicated selector simulations support retaining fastK as the
-non-Gaussian default. Relative to <code>fastk_grad_fast</code>, fastK
-was never materially worse in the examined tiers, whereas pure
-<code>sandwich_qreml</code> had coefficient-RMSE ratios as large as
-1.5653 for a concurrent negative-binomial functional-covariate design
-and 1.4785 for the corresponding beta design under
-functional-independence working-correlation misspecification.
-<code>qreml_fastk</code> reached the same fastK answers but was
-1.16–1.31 times slower, and <code>fastk_staged</code> showed no
-advantage off Gaussian identity-link models. These results motivate the
-current automatic dispatch; they do not imply that fastK is uniformly
-optimal outside the validated simulation regimes.</p>
-</div>
-<div id="why-the-non-gaussian-default-changed-in-0.3.0" class="section level2">
-<h2>Why the non-Gaussian default changed in 0.3.0</h2>
-<p>Before 0.3.0 the non-Gaussian default was <code>&quot;fastk_grad&quot;</code>,
-which began by scoring a dense 55-point common-scale ray, a qREML
-candidate and two axis probes per smoothing parameter, and then ran four
-independent L-BFGS-B optimisations. With three smoothing parameters that
-is roughly 62 exact objective evaluations spent on choosing a starting
-point, against 4 to 46 spent in the optimiser. The start search, not the
-optimisation, was the expense.</p>
-<p><code>&quot;fastk_grad_fast&quot;</code> optimises the <em>same</em> criterion
-from a cheaper start:</p>
-<ol style="list-style-type: decimal">
-<li>a coarse common-scale ray, <span class="math inline">\(\lambda =
-10^{c}\lambda_{\text{fREML}}\)</span> for <span class="math inline">\(c
-\in \{-3, \dots, 3\}\)</span>, extended outward while its best point
-sits on an endpoint and then refined by one-dimensional search;</li>
-<li>a sparse anisotropic stage around that point, letting the smoothing
-parameters separate – a <span class="math inline">\(3^q\)</span> grid
-for small <span class="math inline">\(q\)</span> and a coordinate sweep
-otherwise, so the cost grows linearly rather than exponentially in <span class="math inline">\(q\)</span>;</li>
-<li>a single continuous polish, with a second start only when the
-optimiser fails to converge, stops on a boundary, leaves a large
-projected gradient, or a runner-up candidate is close in criterion but
-far away in <span class="math inline">\(\log\lambda\)</span>.</li>
-</ol>
-<p>Probe evaluations drop from about 62 to about 34, isolated tuning is
-roughly three times faster, and complete fits are 1.2 to 1.5 times
-faster, with the larger gains at larger problems.</p>
-<p><code>&quot;fastk_grad&quot;</code> is still available and unchanged:</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a>fit_prev <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
-<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2, <span class="at">data =</span> dat, <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
-<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(), <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
-<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;exchangeable&quot;</span>, <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span>,</span>
-<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a>  <span class="at">sp.method =</span> <span class="st">&quot;fastk_grad&quot;</span></span>
-<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a>)</span></code></pre></div>
-</div>
-<div id="evidence-for-the-change" class="section level2">
-<h2>Evidence for the change</h2>
-<p>Changing a default selector changes which <span class="math inline">\(\lambda\)</span> is returned, so the two selectors
-were compared in simulation rather than on timing alone.</p>
-<p>Data were generated through a Gaussian copula: correlated latent
-normals are mapped to uniforms and then through the inverse marginal
-distribution function, so the response is <em>exactly</em> Bernoulli,
-Poisson or Gamma at the intended mean while remaining correlated within
-a cluster. The marginal coefficient functions that a GEE targets are
-therefore known in closed form. This matters: adding a correlated error
-to the linear predictor instead would make the marginal mean an
-attenuated version of the coefficient functions under a non-linear link,
-and comparing estimates against them would show bias that is an artefact
-of the simulation rather than a property of the estimator.</p>
-<p>With 300 replicates per configuration, four cluster and visit
-configurations, and both selectors seeing identical data at each
-replicate:</p>
+<div id="choosing-a-working-correlation" class="section level1">
+<h1>Choosing a working correlation</h1>
+<p>There are two directions of dependence in a longitudinal functional
+dataset:</p>
 <ul>
-<li>no comparison of slope root-mean-square error was significant after
-adjustment for multiplicity;</li>
-<li>pointwise and simultaneous coverage of the studentised wild cluster
-bootstrap intervals differed by at most 0.008, against a Monte Carlo
-standard error of 0.013;</li>
-<li>the same held under three working-correlation misspecification
-scenarios: independent longitudinally, independent functionally, and
-both.</li>
+<li><code>corr_long</code> describes association across repeated
+observations within a cluster;</li>
+<li><code>corr_fn</code> describes association across points of the
+functional outcome.</li>
 </ul>
-</div>
-<div id="a-caution-about-reading-lambda" class="section level2">
-<h2>A caution about reading <span class="math inline">\(\lambda\)</span></h2>
-<p>The fastK criterion is very flat in places. Two selectors can return
-smoothing parameters differing by orders of magnitude while agreeing on
-the fitted coefficient functions to five significant figures. When
-comparing selectors, compare the criterion value, the fitted
-coefficients, the effective degrees of freedom, or coefficient error –
-not <span class="math inline">\(\lambda\)</span>.</p>
-</div>
-<div id="the-optional-compiled-kernel" class="section level2">
-<h2>The optional compiled kernel</h2>
-<p>Each non-Gaussian objective evaluation computes, for every fold, a
-linear predictor, a loss and its derivative, and a crossproduct for the
-score contribution. In R that allocates several vectors as long as the
-fold for every fold of every evaluation. A compiled kernel does the same
-arithmetic in one pass with no intermediate allocation, making objective
-evaluations two to three times faster.</p>
-<p>The kernel is an accelerator, not a change of method: it reproduces
-the R objective to about <span class="math inline">\(10^{-16}\)</span>
-in both the score and the gradient, so turning it off cannot move a
-fitted model. It is used automatically when available, and every entry
-point falls back to the R implementation otherwise. To disable it:</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a>fit_no_kernel <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
-<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2, <span class="at">data =</span> dat, <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
-<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(), <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
-<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;exchangeable&quot;</span>, <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span>,</span>
-<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a>  <span class="at">fastk.kernel =</span> <span class="cn">FALSE</span></span>
-<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a>)</span>
-<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a></span>
-<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="co"># or for the whole session</span></span>
-<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a><span class="fu">options</span>(<span class="at">fastFGEE.kernel =</span> <span class="cn">FALSE</span>)</span></code></pre></div>
-</div>
-<div id="the-compiled-working-correlation-inverse" class="section level2">
-<h2>The compiled working-correlation inverse</h2>
-<p>A second compiled kernel sits under
-<code>getD()</code>/<code>getW()</code>. When both correlations are
-independence, exchangeable, or regular-grid AR(1), the closed-form
-precision operators are applied in one allocation and two strided
-passes, rather than by reshaping each cluster block, permuting it with
-<code>aperm()</code> and permuting it back. On the largest benchmark
-cell that took the working-statistics build from 2.27 s to 1.07 s and
-its share of a whole fit from 24% to 13%.</p>
-<p>The same caveat as the fastK kernel applies with one addition. The
-kernel reproduces the R operator to about <span class="math inline">\(10^{-16}\)</span>, so it cannot meaningfully
-change a fitted model — but the fastK criterion is flat in some
-directions, and a perturbation that small can move a selected
-<code>lambda</code> on a plateau by orders of magnitude. Compare
-<code>fit$beta</code> rather than <code>fit$lambda</code> when checking
-a run with the kernel on against one with it off:</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="fu">options</span>(<span class="at">fastFGEE.corr.kernel =</span> <span class="cn">FALSE</span>)</span></code></pre></div>
-<p>FPCA functional correlation and an explicitly requested
-<code>corr.solver = &quot;supergauss&quot;</code> remain separate paths.
-Irregular-grid AR(1) now uses the package’s compiled exact tridiagonal
-Markov precision, avoiding both a dense inverse and the archived
-<code>irregulAR1</code> dependency.</p>
-</div>
-<div id="workspace-memory-for-non-gaussian-tuning" class="section level2">
-<h2>Workspace memory for non-Gaussian tuning</h2>
-<p><code>fastk.memory = &quot;balanced&quot;</code> is the recommended default. It
-is the only current layout that builds <code>prep$X_eval</code>, which
-is required by the compiled fastK loss/gradient kernel. The
-<code>&quot;speed&quot;</code> and <code>&quot;lowmem&quot;</code> layouts therefore use the
-R evaluation path.</p>
-<p>Fresh-process measurements found no regime in which
-<code>&quot;lowmem&quot;</code> reduced peak resident memory; it retained the long
-working table and was substantially slower. It is deprecated and will be
-removed in a future release. <code>&quot;speed&quot;</code> remains available for
-cases where a modest reduction in retained workspace is worth slower R
-evaluation.</p>
-<p>Peak memory must be assessed in a fresh R process because the long
-data, model matrix, package dependencies, and transient
-working-statistics construction usually dominate the retained fastK
-workspace.</p>
-</div>
-</div>
-<div id="working-correlation-structures" class="section level1">
-<h1>Working correlation structures</h1>
-<p>The new interface makes the two correlation directions explicit. The
-main combinations are summarized below.</p>
+<p>The available choices are:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Argument</th>
+<th>Choices</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>corr_long</code></td>
+<td><code>&quot;independent&quot;</code>, <code>&quot;exchangeable&quot;</code>,
+<code>&quot;ar1&quot;</code></td>
+</tr>
+<tr class="even">
+<td><code>corr_fn</code></td>
+<td><code>&quot;independent&quot;</code>, <code>&quot;exchangeable&quot;</code>,
+<code>&quot;ar1&quot;</code>, <code>&quot;fpca&quot;</code></td>
+</tr>
+</tbody>
+</table>
+<p>Other structured working correlations, including stationary AR(<span class="math inline">\(p\)</span>) and Matérn models on regular grids,
+are natural extensions. They are discussed under <a href="#numerical-dependencies">Numerical dependencies</a> below.</p>
+<p>A working correlation is a device for improving efficiency. It does
+not need to be the true covariance model for the marginal mean model to
+be useful.</p>
+<p>For longitudinal dependence, <code>&quot;exchangeable&quot;</code> is useful
+when correlations are roughly similar across visits. <code>&quot;ar1&quot;</code>
+is useful when observations closer in time are expected to be more
+strongly related. For the functional direction, <code>&quot;ar1&quot;</code> gives
+a simple local correlation model, while <code>&quot;fpca&quot;</code> provides a
+more flexible low-rank covariance estimate.</p>
+<div id="common-correlation-patterns" class="section level2">
+<h2>Common correlation patterns</h2>
+<p>When only one direction is modeled as correlated, the working
+covariance is block diagonal. When both directions are correlated,
+<code>fastFGEE</code> uses a separable (Kronecker product) working
+covariance.</p>
 <table>
 <colgroup>
 <col width="33%" />
@@ -688,385 +497,535 @@ main combinations are summarized below.</p>
 <tr class="header">
 <th><code>corr_long</code></th>
 <th><code>corr_fn</code></th>
-<th>Working covariance interpretation</th>
+<th>Interpretation</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
 <td><code>&quot;ar1&quot;</code> or <code>&quot;exchangeable&quot;</code></td>
-<td><code>&quot;independence&quot;</code></td>
-<td>Block diagonal in the <strong>longitudinal</strong> direction</td>
+<td><code>&quot;independent&quot;</code></td>
+<td>model repeated-observation correlation only</td>
 </tr>
 <tr class="even">
-<td><code>&quot;independence&quot;</code></td>
+<td><code>&quot;independent&quot;</code></td>
 <td><code>&quot;ar1&quot;</code> or <code>&quot;exchangeable&quot;</code></td>
-<td>Block diagonal in the <strong>functional</strong> direction</td>
+<td>model functional-domain correlation only</td>
 </tr>
 <tr class="odd">
-<td><code>&quot;independence&quot;</code></td>
+<td><code>&quot;independent&quot;</code></td>
 <td><code>&quot;fpca&quot;</code></td>
-<td>Block diagonal in the functional direction, with FPCA-based
-functional covariance</td>
+<td>FPCA working covariance in the functional direction</td>
 </tr>
 <tr class="even">
-<td>non-independence</td>
-<td>non-independence</td>
-<td>Separable / Kronecker product working covariance</td>
-</tr>
-<tr class="odd">
-<td><code>&quot;ar1&quot;</code> or <code>&quot;exchangeable&quot;</code></td>
-<td><code>&quot;fpca&quot;</code></td>
-<td>Separable / Kronecker working covariance with a longitudinal
-parametric factor and an FPCA-based functional factor</td>
+<td>non-independent</td>
+<td>non-independent</td>
+<td>separable / Kronecker working covariance</td>
 </tr>
 </tbody>
 </table>
-<div id="block-diagonal-versus-kronecker-product-working-covariance" class="section level2">
-<h2>Block diagonal versus Kronecker product working covariance</h2>
-<p>When exactly one direction is non-independent, the working covariance
-is <strong>block diagonal</strong>. This means the package models
-dependence in only one direction:</p>
-<ul>
-<li><code>corr_long != &quot;independence&quot;</code> and
-<code>corr_fn = &quot;independence&quot;</code> gives a block diagonal covariance
-across longitudinal observations,</li>
-<li><code>corr_long = &quot;independence&quot;</code> and
-<code>corr_fn != &quot;independence&quot;</code> gives a block diagonal covariance
-across functional observations.</li>
-</ul>
-<p>For the parametric block-diagonal cases (<code>&quot;ar1&quot;</code> or
-<code>&quot;exchangeable&quot;</code>), the package estimates a different
-correlation parameter for each block across the other dimension:</p>
-<ul>
-<li>longitudinal block-diagonal fits estimate <code>rho_long(s)</code>
-across the functional domain,</li>
-<li>functional block-diagonal fits estimate <code>rho_fn(t)</code>
-across longitudinal time.</li>
-</ul>
-<p>If <code>rho.smooth = TRUE</code>, those block-specific correlation
-curves are smoothed across the corresponding index.</p>
-<p>When <strong>both</strong> directions are non-independent, the
-package uses a <strong>separable / Kronecker product</strong> working
-covariance. In this case the correlation parameters are pooled and fixed
-within direction:</p>
-<ul>
-<li>one pooled longitudinal correlation parameter (or longitudinal
-factor), and</li>
-<li>one pooled functional correlation parameter (or functional
-factor).</li>
-</ul>
-<p>So the main difference is:</p>
-<ul>
-<li><strong>block diagonal</strong>: correlation varies by block,</li>
-<li><strong>Kronecker / separable</strong>: correlation is fixed within
-direction and shared across blocks.</li>
-</ul>
-<p>For Kronecker fits, each cluster must be observed on a complete
-longitudinal-by-functional grid.</p>
+<p>For example:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="co"># Longitudinal correlation only</span></span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>fit_long <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>  Y <span class="sc">~</span> X1 <span class="sc">+</span> X2, <span class="at">data =</span> dat, <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(), <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>, <span class="at">corr_fn =</span> <span class="st">&quot;independent&quot;</span></span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a>)</span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a></span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="co"># Correlation in both directions</span></span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a>fit_sep <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a>  Y <span class="sc">~</span> X1 <span class="sc">+</span> X2, <span class="at">data =</span> dat, <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(), <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb8-12"><a href="#cb8-12" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>, <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span></span>
+<span id="cb8-13"><a href="#cb8-13" tabindex="-1"></a>)</span>
+<span id="cb8-14"><a href="#cb8-14" tabindex="-1"></a></span>
+<span id="cb8-15"><a href="#cb8-15" tabindex="-1"></a><span class="co"># Flexible functional covariance</span></span>
+<span id="cb8-16"><a href="#cb8-16" tabindex="-1"></a>fit_fpca <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb8-17"><a href="#cb8-17" tabindex="-1"></a>  Y <span class="sc">~</span> X1 <span class="sc">+</span> X2, <span class="at">data =</span> dat, <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb8-18"><a href="#cb8-18" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(), <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb8-19"><a href="#cb8-19" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;independent&quot;</span>, <span class="at">corr_fn =</span> <span class="st">&quot;fpca&quot;</span></span>
+<span id="cb8-20"><a href="#cb8-20" tabindex="-1"></a>)</span></code></pre></div>
+<p>Kronecker fits require a complete longitudinal-by-functional grid
+within each cluster.</p>
 </div>
-<div id="longitudinal-block-diagonal-example" class="section level2">
-<h2>Longitudinal block-diagonal example</h2>
-<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a>fit_long_block <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
-<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
-<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
-<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
-<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
-<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
-<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>,</span>
-<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;independence&quot;</span>,</span>
-<span id="cb10-9"><a href="#cb10-9" tabindex="-1"></a>  <span class="at">rho.smooth =</span> <span class="cn">TRUE</span>,</span>
-<span id="cb10-10"><a href="#cb10-10" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
-<span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
-<span id="cb10-12"><a href="#cb10-12" tabindex="-1"></a>)</span></code></pre></div>
-<p>This fit models within-cluster dependence across repeated
-observations, and allows the longitudinal correlation estimate to vary
-over the functional domain.</p>
-</div>
-<div id="functional-block-diagonal-example" class="section level2">
-<h2>Functional block-diagonal example</h2>
-<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>fit_fn_block <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
-<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
-<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
-<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
-<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
-<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
-<span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;independence&quot;</span>,</span>
-<span id="cb11-8"><a href="#cb11-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;exchangeable&quot;</span>,</span>
-<span id="cb11-9"><a href="#cb11-9" tabindex="-1"></a>  <span class="at">rho.smooth =</span> <span class="cn">TRUE</span>,</span>
-<span id="cb11-10"><a href="#cb11-10" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
-<span id="cb11-11"><a href="#cb11-11" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
-<span id="cb11-12"><a href="#cb11-12" tabindex="-1"></a>)</span></code></pre></div>
-<p>This fit models dependence along the functional domain while treating
-repeated observations as working independent.</p>
-</div>
-<div id="separable-kronecker-example" class="section level2">
-<h2>Separable / Kronecker example</h2>
-<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a>fit_sep <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
-<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
-<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
-<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
-<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
-<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
-<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>,</span>
-<span id="cb12-8"><a href="#cb12-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span>,</span>
-<span id="cb12-9"><a href="#cb12-9" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
-<span id="cb12-10"><a href="#cb12-10" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
-<span id="cb12-11"><a href="#cb12-11" tabindex="-1"></a>)</span></code></pre></div>
-<p>This fit uses a separable working covariance with one longitudinal
-AR1 factor and one functional AR1 factor.</p>
-</div>
-<div id="fpca-based-functional-covariance" class="section level2">
-<h2>FPCA-based functional covariance</h2>
-<p><code>fastFGEE</code> also allows an FPCA-based covariance in the
-functional direction by setting <code>corr_fn = &quot;fpca&quot;</code>.</p>
-<div id="fpca-functional-block-diagonal-fit" class="section level3">
-<h3>FPCA functional block-diagonal fit</h3>
-<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>fit_fpca_block <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
-<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
-<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
-<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
-<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
-<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
-<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;independence&quot;</span>,</span>
-<span id="cb13-8"><a href="#cb13-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;fpca&quot;</span>,</span>
-<span id="cb13-9"><a href="#cb13-9" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
-<span id="cb13-10"><a href="#cb13-10" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
-<span id="cb13-11"><a href="#cb13-11" tabindex="-1"></a>)</span></code></pre></div>
-<p>Here the longitudinal direction is working independent, and the
-functional blocks are modeled with an FPCA-based covariance
-estimate.</p>
-</div>
-<div id="fpca-plus-longitudinal-correlation-separable-kronecker-fit" class="section level3">
-<h3>FPCA plus longitudinal correlation: separable / Kronecker fit</h3>
-<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a>fit_fpca_sep <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
-<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
-<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
-<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
-<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
-<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
-<span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>,</span>
-<span id="cb14-8"><a href="#cb14-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;fpca&quot;</span>,</span>
-<span id="cb14-9"><a href="#cb14-9" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
-<span id="cb14-10"><a href="#cb14-10" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
-<span id="cb14-11"><a href="#cb14-11" tabindex="-1"></a>)</span></code></pre></div>
-<p>This combines a parametric longitudinal factor with an FPCA-based
-functional factor in a separable working covariance.</p>
-</div>
-</div>
-</div>
-<div id="supplying-a-pre-fit-refundpffr-object" class="section level1">
-<h1>Supplying a pre-fit <code>refund::pffr()</code> object</h1>
-<p>A useful feature of the package is that you can fit
-<code>refund::pffr()</code> yourself and then pass the fitted object
-through <code>pffr.mod</code>. This is particularly helpful when:</p>
-<ul>
-<li>the functional grid is irregular,</li>
-<li>you want to control the initial <code>pffr()</code> call directly,
-or</li>
-<li>you want to compare the initial fit with the fGEE update.</li>
-</ul>
-<p>The main thing to remember is that <code>pffr.mod</code> supplies the
-aligned long-format response and design matrix, while <code>data</code>
-should still be the original wide data set used to define the cluster
-structure.</p>
-<div id="example-irregular-functional-grid" class="section level2">
-<h2>Example: irregular functional grid</h2>
-<p>The following code shows the workflow using a user-supplied
-<code>pffr()</code> fit.</p>
-<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="co"># Start from the wide data object used above</span></span>
-<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a>Y_wide <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(dat<span class="sc">$</span>Y)</span>
-<span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a><span class="fu">colnames</span>(Y_wide) <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">&quot;Y_&quot;</span>, <span class="fu">seq_len</span>(<span class="fu">ncol</span>(Y_wide)))</span>
-<span id="cb15-4"><a href="#cb15-4" tabindex="-1"></a></span>
-<span id="cb15-5"><a href="#cb15-5" tabindex="-1"></a>dat_wide <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb15-6"><a href="#cb15-6" tabindex="-1"></a>  <span class="at">ID =</span> dat<span class="sc">$</span>ID,</span>
-<span id="cb15-7"><a href="#cb15-7" tabindex="-1"></a>  <span class="at">X1 =</span> dat<span class="sc">$</span>X1,</span>
-<span id="cb15-8"><a href="#cb15-8" tabindex="-1"></a>  <span class="at">X2 =</span> dat<span class="sc">$</span>X2,</span>
-<span id="cb15-9"><a href="#cb15-9" tabindex="-1"></a>  <span class="at">time =</span> dat<span class="sc">$</span>time,</span>
-<span id="cb15-10"><a href="#cb15-10" tabindex="-1"></a>  Y_wide</span>
-<span id="cb15-11"><a href="#cb15-11" tabindex="-1"></a>)</span>
-<span id="cb15-12"><a href="#cb15-12" tabindex="-1"></a></span>
-<span id="cb15-13"><a href="#cb15-13" tabindex="-1"></a><span class="co"># Convert the matrix outcome to long format</span></span>
-<span id="cb15-14"><a href="#cb15-14" tabindex="-1"></a><span class="co"># (shown here with tidyr for readability)</span></span>
-<span id="cb15-15"><a href="#cb15-15" tabindex="-1"></a>dat_long <span class="ot">&lt;-</span> tidyr<span class="sc">::</span><span class="fu">pivot_longer</span>(</span>
-<span id="cb15-16"><a href="#cb15-16" tabindex="-1"></a>  dat_wide,</span>
-<span id="cb15-17"><a href="#cb15-17" tabindex="-1"></a>  <span class="at">cols =</span> tidyselect<span class="sc">::</span><span class="fu">starts_with</span>(<span class="st">&quot;Y_&quot;</span>),</span>
-<span id="cb15-18"><a href="#cb15-18" tabindex="-1"></a>  <span class="at">names_to =</span> <span class="st">&quot;yindex&quot;</span>,</span>
-<span id="cb15-19"><a href="#cb15-19" tabindex="-1"></a>  <span class="at">names_prefix =</span> <span class="st">&quot;Y_&quot;</span>,</span>
-<span id="cb15-20"><a href="#cb15-20" tabindex="-1"></a>  <span class="at">values_to =</span> <span class="st">&quot;Y&quot;</span>,</span>
-<span id="cb15-21"><a href="#cb15-21" tabindex="-1"></a>  <span class="at">values_drop_na =</span> <span class="cn">FALSE</span></span>
-<span id="cb15-22"><a href="#cb15-22" tabindex="-1"></a>)</span>
-<span id="cb15-23"><a href="#cb15-23" tabindex="-1"></a></span>
-<span id="cb15-24"><a href="#cb15-24" tabindex="-1"></a>dat_long<span class="sc">$</span>yindex <span class="ot">&lt;-</span> <span class="fu">as.integer</span>(dat_long<span class="sc">$</span>yindex)</span>
-<span id="cb15-25"><a href="#cb15-25" tabindex="-1"></a>dat_long<span class="sc">$</span>time <span class="ot">&lt;-</span> <span class="fu">as.numeric</span>(dat_long<span class="sc">$</span>time)</span>
-<span id="cb15-26"><a href="#cb15-26" tabindex="-1"></a></span>
-<span id="cb15-27"><a href="#cb15-27" tabindex="-1"></a><span class="co"># Construct the ydata object expected by refund::pffr()</span></span>
-<span id="cb15-28"><a href="#cb15-28" tabindex="-1"></a>Y.mat <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb15-29"><a href="#cb15-29" tabindex="-1"></a>  <span class="at">.obs =</span> <span class="fu">seq_len</span>(<span class="fu">nrow</span>(dat_long)),</span>
-<span id="cb15-30"><a href="#cb15-30" tabindex="-1"></a>  <span class="at">.index =</span> dat_long<span class="sc">$</span>yindex,</span>
-<span id="cb15-31"><a href="#cb15-31" tabindex="-1"></a>  <span class="at">.value =</span> dat_long<span class="sc">$</span>Y</span>
-<span id="cb15-32"><a href="#cb15-32" tabindex="-1"></a>)</span>
-<span id="cb15-33"><a href="#cb15-33" tabindex="-1"></a></span>
-<span id="cb15-34"><a href="#cb15-34" tabindex="-1"></a>fit_pffr <span class="ot">&lt;-</span> refund<span class="sc">::</span><span class="fu">pffr</span>(</span>
-<span id="cb15-35"><a href="#cb15-35" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
-<span id="cb15-36"><a href="#cb15-36" tabindex="-1"></a>  <span class="at">algorithm =</span> <span class="st">&quot;bam&quot;</span>,</span>
-<span id="cb15-37"><a href="#cb15-37" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(),</span>
-<span id="cb15-38"><a href="#cb15-38" tabindex="-1"></a>  <span class="at">discrete =</span> <span class="cn">TRUE</span>,</span>
-<span id="cb15-39"><a href="#cb15-39" tabindex="-1"></a>  <span class="at">yind =</span> Y.mat<span class="sc">$</span>.index,</span>
-<span id="cb15-40"><a href="#cb15-40" tabindex="-1"></a>  <span class="at">ydata =</span> Y.mat,</span>
-<span id="cb15-41"><a href="#cb15-41" tabindex="-1"></a>  <span class="at">bs.yindex =</span> <span class="fu">list</span>(<span class="at">bs =</span> <span class="st">&quot;bs&quot;</span>, <span class="at">k =</span> <span class="dv">11</span>),</span>
-<span id="cb15-42"><a href="#cb15-42" tabindex="-1"></a>  <span class="at">data =</span> dat_long</span>
-<span id="cb15-43"><a href="#cb15-43" tabindex="-1"></a>)</span></code></pre></div>
-<p>Now update that initial fit with <code>fgee()</code>. Notice that
-<code>pffr.mod</code> receives the fitted <code>pffr()</code> object,
-but <code>data</code> is still the original wide data frame.</p>
-<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>fit_from_pffr <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
-<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
-<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a>  <span class="at">pffr.mod =</span> fit_pffr,</span>
-<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
-<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
-<span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
-<span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
-<span id="cb16-8"><a href="#cb16-8" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;exchangeable&quot;</span>,</span>
-<span id="cb16-9"><a href="#cb16-9" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;independence&quot;</span>,</span>
-<span id="cb16-10"><a href="#cb16-10" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
-<span id="cb16-11"><a href="#cb16-11" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
-<span id="cb16-12"><a href="#cb16-12" tabindex="-1"></a>)</span>
-<span id="cb16-13"><a href="#cb16-13" tabindex="-1"></a></span>
-<span id="cb16-14"><a href="#cb16-14" tabindex="-1"></a><span class="fu">fgee.plot</span>(fit_from_pffr)</span></code></pre></div>
+<div id="smoothing-or-pooling-correlation-estimates" class="section level2">
+<h2>Smoothing or pooling correlation estimates</h2>
+<p>With a block-diagonal working covariance, the correlation parameter
+can vary over the other index. <code>rho.smooth = TRUE</code> smooths
+those pointwise estimates. <code>rho.pool</code> can instead use one
+pooled parameter when that is more appropriate. The default,
+<code>rho.pool = &quot;fn&quot;</code>, pools a functional-only correlation
+estimate; <code>&quot;long&quot;</code> pools a longitudinal-only estimate,
+<code>&quot;both&quot;</code> allows either, and <code>&quot;none&quot;</code> keeps the
+pointwise behavior used in older versions.</p>
 </div>
 </div>
 <div id="variance-estimators-and-confidence-intervals" class="section level1">
 <h1>Variance estimators and confidence intervals</h1>
-<p><code>var.type</code> selects the coefficient covariance estimator.
-The historically named <code>joint.CI</code> argument selects pointwise
-calibration and, when requested, a whole-curve maximum-statistic
-simultaneous band. These are distinct targets: pointwise coverage at
-each location does not imply simultaneous coverage over the entire
-function.</p>
-<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a><span class="co"># Sandwich covariance with studentized wild-cluster calibration</span></span>
-<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a>fit_sw <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
-<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
-<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
-<span id="cb17-5"><a href="#cb17-5" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
-<span id="cb17-6"><a href="#cb17-6" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
-<span id="cb17-7"><a href="#cb17-7" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
-<span id="cb17-8"><a href="#cb17-8" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>,</span>
-<span id="cb17-9"><a href="#cb17-9" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span>,</span>
-<span id="cb17-10"><a href="#cb17-10" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span>,</span>
-<span id="cb17-11"><a href="#cb17-11" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span></span>
-<span id="cb17-12"><a href="#cb17-12" tabindex="-1"></a>)</span>
-<span id="cb17-13"><a href="#cb17-13" tabindex="-1"></a></span>
-<span id="cb17-14"><a href="#cb17-14" tabindex="-1"></a><span class="co"># Fast cluster-bootstrap covariance with the same wild calibration</span></span>
-<span id="cb17-15"><a href="#cb17-15" tabindex="-1"></a>fit_fb <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
-<span id="cb17-16"><a href="#cb17-16" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
-<span id="cb17-17"><a href="#cb17-17" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
-<span id="cb17-18"><a href="#cb17-18" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
-<span id="cb17-19"><a href="#cb17-19" tabindex="-1"></a>  <span class="at">family =</span> <span class="st">&quot;binomial&quot;</span>,</span>
-<span id="cb17-20"><a href="#cb17-20" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
-<span id="cb17-21"><a href="#cb17-21" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>,</span>
-<span id="cb17-22"><a href="#cb17-22" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span>,</span>
-<span id="cb17-23"><a href="#cb17-23" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;fastboot&quot;</span>,</span>
-<span id="cb17-24"><a href="#cb17-24" tabindex="-1"></a>  <span class="at">boot.samps =</span> <span class="dv">2000</span>,</span>
-<span id="cb17-25"><a href="#cb17-25" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span></span>
-<span id="cb17-26"><a href="#cb17-26" tabindex="-1"></a>)</span></code></pre></div>
-<p>A practical default is <code>var.type = &quot;sandwich&quot;</code> with
-<code>joint.CI = &quot;wild&quot;</code>. The resulting simultaneous band is a
-resampling-based whole-curve procedure, not a guarantee of nominal
-finite-sample coverage. Reliability can deteriorate with few independent
-clusters, concentrated cluster leverage, unstable nuisance parameters,
-or unstable working-correlation estimates. In particular, making fully
-iterated or exact experimental code inaccessible does not remove these
-small-sample limitations.</p>
+<p>The covariance estimator and interval calibration are controlled
+separately.</p>
+<p><code>var.type</code> chooses the covariance estimate for the spline
+coefficients:</p>
+<table>
+<colgroup>
+<col width="50%" />
+<col width="50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th><code>var.type</code></th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>&quot;sandwich&quot;</code></td>
+<td>default cluster-robust sandwich covariance</td>
+</tr>
+<tr class="even">
+<td><code>&quot;fastboot&quot;</code></td>
+<td>fast cluster-bootstrap covariance; preferred over
+<code>&quot;boot&quot;</code></td>
+</tr>
+<tr class="odd">
+<td><code>&quot;boot&quot;</code></td>
+<td>cluster bootstrap retained for compatibility</td>
+</tr>
+</tbody>
+</table>
+<p><code>joint.CI = &quot;wild&quot;</code> uses the studentized wild cluster
+bootstrap to construct pointwise intervals and an optional simultaneous
+band over the whole coefficient function. This is the recommended
+setting for routine use.</p>
+<p>For example, the first few interval limits for the <code>X1</code>
+coefficient in the fit above are stored directly in the fitted
+object:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="fu">head</span>(fit_1step<span class="sc">$</span>crit<span class="sc">$</span>ci<span class="sc">$</span>ci_pointwise[[<span class="dv">2</span>]], <span class="dv">3</span>)</span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a><span class="co">#&gt;         lower    upper</span></span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a><span class="co">#&gt; [1,] 1.302861 1.998291</span></span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a><span class="co">#&gt; [2,] 1.285236 1.945633</span></span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a><span class="co">#&gt; [3,] 1.271597 1.898965</span></span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a><span class="fu">head</span>(fit_1step<span class="sc">$</span>crit<span class="sc">$</span>ci<span class="sc">$</span>ci_joint[[<span class="dv">2</span>]], <span class="dv">3</span>)</span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a><span class="co">#&gt;         lower    upper</span></span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a><span class="co">#&gt; [1,] 1.116526 2.184625</span></span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a><span class="co">#&gt; [2,] 1.108288 2.122580</span></span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a><span class="co">#&gt; [3,] 1.103499 2.067062</span></span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a>fit_sw <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>  Y <span class="sc">~</span> X1 <span class="sc">+</span> X2, <span class="at">data =</span> dat, <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(), <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>, <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span>,</span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span></span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a>)</span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a></span>
+<span id="cb10-9"><a href="#cb10-9" tabindex="-1"></a>fit_fb <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb10-10"><a href="#cb10-10" tabindex="-1"></a>  Y <span class="sc">~</span> X1 <span class="sc">+</span> X2, <span class="at">data =</span> dat, <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(), <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb10-12"><a href="#cb10-12" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>, <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb10-13"><a href="#cb10-13" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;fastboot&quot;</span>,</span>
+<span id="cb10-14"><a href="#cb10-14" tabindex="-1"></a>  <span class="at">boot.samps =</span> <span class="dv">2000</span>,</span>
+<span id="cb10-15"><a href="#cb10-15" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span></span>
+<span id="cb10-16"><a href="#cb10-16" tabindex="-1"></a>)</span></code></pre></div>
+<p>A pointwise interval answers a different question from a simultaneous
+band. The simultaneous band is calibrated to cover the whole coefficient
+function in the resampling procedure. As with other cluster-robust
+methods, finite-sample performance can be poor when there are very few
+independent clusters or when a small number of clusters have high
+leverage.</p>
+<p>Set <code>joint.CI = FALSE</code> when confidence intervals are not
+needed.</p>
 </div>
-<div id="public-interface-notes" class="section level1">
-<h1>Public-interface notes</h1>
-<p>Compared with older versions:</p>
-<ul>
-<li><code>cov.type</code> is replaced by <code>corr_long</code> and
-<code>corr_fn</code>;</li>
-<li><code>sandwich</code> is replaced by <code>var.type</code>;</li>
-<li>public fitting is always one-step;</li>
-<li><code>pffr.mod</code> remains the supported way to supply an initial
-<code>refund::pffr()</code> fit;</li>
-<li>experimental exact, legacy, pffr-only, and fully iterated controls
-are internal.</li>
-</ul>
+<div id="starting-from-your-own-refundpffr-fit" class="section level1">
+<h1>Starting from your own <code>refund::pffr()</code> fit</h1>
+<p><code>fgee()</code> normally fits the initial
+<code>refund::pffr()</code> model for you. Supplying
+<code>pffr.mod</code> is useful when you want more control over that
+initial fit, when the functional grid is irregular, or when you want to
+compare the initial fit with the one-step fGEE update.</p>
+<p><code>pffr.mod</code> supplies the aligned functional response and
+design information from <code>pffr()</code>. The <code>data</code>
+argument should still be the original wide data set used to define
+clusters and repeated observations.</p>
+<div id="common-grid-example" class="section level2">
+<h2>Common-grid example</h2>
+<p>For data observed on a common grid, you can fit <code>pffr()</code>
+directly and pass the result to <code>fgee()</code>:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>fit_pffr <span class="ot">&lt;-</span> refund<span class="sc">::</span><span class="fu">pffr</span>(</span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>  Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(),</span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a>  <span class="at">algorithm =</span> <span class="st">&quot;bam&quot;</span>,</span>
+<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">&quot;fREML&quot;</span>,</span>
+<span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a>  <span class="at">discrete =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb11-8"><a href="#cb11-8" tabindex="-1"></a>  <span class="at">bs.yindex =</span> <span class="fu">list</span>(<span class="at">bs =</span> <span class="st">&quot;bs&quot;</span>, <span class="at">k =</span> <span class="dv">11</span>, <span class="at">m =</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">1</span>))</span>
+<span id="cb11-9"><a href="#cb11-9" tabindex="-1"></a>)</span>
+<span id="cb11-10"><a href="#cb11-10" tabindex="-1"></a></span>
+<span id="cb11-11"><a href="#cb11-11" tabindex="-1"></a>fit_from_pffr <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb11-12"><a href="#cb11-12" tabindex="-1"></a>  Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb11-13"><a href="#cb11-13" tabindex="-1"></a>  <span class="at">pffr.mod =</span> fit_pffr,</span>
+<span id="cb11-14"><a href="#cb11-14" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb11-15"><a href="#cb11-15" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb11-16"><a href="#cb11-16" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(),</span>
+<span id="cb11-17"><a href="#cb11-17" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb11-18"><a href="#cb11-18" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;exchangeable&quot;</span>,</span>
+<span id="cb11-19"><a href="#cb11-19" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;independent&quot;</span></span>
+<span id="cb11-20"><a href="#cb11-20" tabindex="-1"></a>)</span>
+<span id="cb11-21"><a href="#cb11-21" tabindex="-1"></a></span>
+<span id="cb11-22"><a href="#cb11-22" tabindex="-1"></a><span class="fu">fgee.plot</span>(fit_from_pffr)</span></code></pre></div>
 </div>
-<div id="optimized-one-step-engine" class="section level1">
-<h1>Optimized one-step engine</h1>
-<p>The package uses a compact one-pass working-statistics engine by
-default for public one-step workflows. For cluster <code>i</code>, it
-forms</p>
-<p><span class="math display">\[
-W_i = Z_i^T R_i^{-1} Z_i, \qquad
-d_i = Z_i^T R_i^{-1} r_i,
-\]</span></p>
-<p>by applying the working-correlation inverse once to the augmented
-matrix <code>cbind(Z_i, r_i)</code>. Regular AR(1) and exchangeable
-structures use direct precision operators. The established
-<code>SuperGauss</code> Toeplitz implementation is still available and
-can be forced with <code>corr.solver = &quot;supergauss&quot;</code>.</p>
-<p>The public default remains the studentized wild-cluster procedure for
-pointwise intervals and optional simultaneous bands. Consequently,
-<code>working.retain = &quot;auto&quot;</code> resolves to <code>&quot;scores&quot;</code>:
-the fit retains the compact <code>p</code> by <code>N</code> matrix of
-cluster score contributions and aggregate bread matrices, but not one
-<code>p</code> by <code>p</code> bread matrix for every cluster.</p>
-<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
-<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a>  Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
-<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
-<span id="cb18-4"><a href="#cb18-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
-<span id="cb18-5"><a href="#cb18-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(<span class="at">link =</span> <span class="st">&quot;logit&quot;</span>),</span>
-<span id="cb18-6"><a href="#cb18-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
-<span id="cb18-7"><a href="#cb18-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;exchangeable&quot;</span>,</span>
-<span id="cb18-8"><a href="#cb18-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span>,</span>
-<span id="cb18-9"><a href="#cb18-9" tabindex="-1"></a>  <span class="at">sp.method =</span> <span class="st">&quot;auto&quot;</span>,</span>
-<span id="cb18-10"><a href="#cb18-10" tabindex="-1"></a>  <span class="at">working.retain =</span> <span class="st">&quot;auto&quot;</span>,</span>
-<span id="cb18-11"><a href="#cb18-11" tabindex="-1"></a>  <span class="at">corr.solver =</span> <span class="st">&quot;auto&quot;</span></span>
-<span id="cb18-12"><a href="#cb18-12" tabindex="-1"></a>)</span></code></pre></div>
-<p>Available smoothing selectors include:</p>
-<ul>
-<li><code>fastk_staged</code>: the published staged fast cluster-CV
-criterion;</li>
-<li><code>fastk_grad</code>: continuous analytic-gradient optimization
-of the same exact fastK criterion;</li>
-<li><code>sandwich_qreml</code>: an experimental coefficient-space
-working restricted quasi-likelihood with one-sided sandwich information
-scaling;</li>
-<li><code>qreml_fastk</code>: qREML initialization followed by exact
-fastK optimization.</li>
-</ul>
-<p><code>qreml_fastk</code> is retained for reproducibility, but in the
-selector simulations it reached the same fastK answers as
-<code>fastk_grad_fast</code> while taking 1.16–1.31 times as long.
-<code>fastk_staged</code> remains the Gaussian identity default; it
-showed no advantage for the non-Gaussian families. Pure
-<code>sandwich_qreml</code> is an opt-in experimental selector: it can
-be efficient when the working correlation is well specified, but its
-worst examined coefficient-RMSE ratios relative to
-<code>fastk_grad_fast</code> were 1.5653 for concurrent
-negative-binomial data and 1.4785 for concurrent beta data under
-functional-independence misspecification. It is therefore not the
-automatic default.</p>
-<p>For Gaussian identity-link models, both staged and gradient fastK use
-fold sufficient statistics after preparation. The tuning objective
-therefore does not revisit the observation-level functional design at
-every candidate smoothing vector.</p>
+<div id="irregular-functional-grid" class="section level2">
+<h2>Irregular functional grid</h2>
+<p>If the functional response is observed on an irregular grid, it is
+usually easier to build the <code>pffr()</code> input explicitly and
+then pass the fitted object to <code>fgee()</code>. The important pieces
+are the response value and its functional-domain location. The grid
+values do not have to be equally spaced.</p>
+<p>The example below starts from the same wide data layout used above
+and shows the full conversion. In your own data, replace
+<code>s_grid</code> with the actual functional domain locations.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="co"># Start from the wide data object used above</span></span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>Y_wide <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(dat<span class="sc">$</span>Y)</span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a><span class="fu">colnames</span>(Y_wide) <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">&quot;Y_&quot;</span>, <span class="fu">seq_len</span>(<span class="fu">ncol</span>(Y_wide)))</span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a><span class="co"># Functional-domain locations. These may be irregularly spaced.</span></span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a>s_grid <span class="ot">&lt;-</span> <span class="fu">attr</span>(dat<span class="sc">$</span>Y, <span class="st">&quot;yindex&quot;</span>)</span>
+<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">is.null</span>(s_grid)) {</span>
+<span id="cb12-8"><a href="#cb12-8" tabindex="-1"></a>  s_grid <span class="ot">&lt;-</span> <span class="fu">seq_len</span>(<span class="fu">ncol</span>(Y_wide))</span>
+<span id="cb12-9"><a href="#cb12-9" tabindex="-1"></a>}</span>
+<span id="cb12-10"><a href="#cb12-10" tabindex="-1"></a></span>
+<span id="cb12-11"><a href="#cb12-11" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">length</span>(s_grid) <span class="sc">==</span> <span class="fu">ncol</span>(Y_wide))</span>
+<span id="cb12-12"><a href="#cb12-12" tabindex="-1"></a></span>
+<span id="cb12-13"><a href="#cb12-13" tabindex="-1"></a>dat_wide <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb12-14"><a href="#cb12-14" tabindex="-1"></a>  <span class="at">ID =</span> dat<span class="sc">$</span>ID,</span>
+<span id="cb12-15"><a href="#cb12-15" tabindex="-1"></a>  <span class="at">X1 =</span> dat<span class="sc">$</span>X1,</span>
+<span id="cb12-16"><a href="#cb12-16" tabindex="-1"></a>  <span class="at">X2 =</span> dat<span class="sc">$</span>X2,</span>
+<span id="cb12-17"><a href="#cb12-17" tabindex="-1"></a>  <span class="at">time =</span> dat<span class="sc">$</span>time,</span>
+<span id="cb12-18"><a href="#cb12-18" tabindex="-1"></a>  Y_wide</span>
+<span id="cb12-19"><a href="#cb12-19" tabindex="-1"></a>)</span>
+<span id="cb12-20"><a href="#cb12-20" tabindex="-1"></a></span>
+<span id="cb12-21"><a href="#cb12-21" tabindex="-1"></a><span class="co"># Convert the matrix response to long form.</span></span>
+<span id="cb12-22"><a href="#cb12-22" tabindex="-1"></a><span class="co"># tidyr is used here only to make the reshaping easy to read.</span></span>
+<span id="cb12-23"><a href="#cb12-23" tabindex="-1"></a>dat_long <span class="ot">&lt;-</span> tidyr<span class="sc">::</span><span class="fu">pivot_longer</span>(</span>
+<span id="cb12-24"><a href="#cb12-24" tabindex="-1"></a>  dat_wide,</span>
+<span id="cb12-25"><a href="#cb12-25" tabindex="-1"></a>  <span class="at">cols =</span> tidyselect<span class="sc">::</span><span class="fu">starts_with</span>(<span class="st">&quot;Y_&quot;</span>),</span>
+<span id="cb12-26"><a href="#cb12-26" tabindex="-1"></a>  <span class="at">names_to =</span> <span class="st">&quot;yindex_col&quot;</span>,</span>
+<span id="cb12-27"><a href="#cb12-27" tabindex="-1"></a>  <span class="at">names_prefix =</span> <span class="st">&quot;Y_&quot;</span>,</span>
+<span id="cb12-28"><a href="#cb12-28" tabindex="-1"></a>  <span class="at">values_to =</span> <span class="st">&quot;Y&quot;</span>,</span>
+<span id="cb12-29"><a href="#cb12-29" tabindex="-1"></a>  <span class="at">values_drop_na =</span> <span class="cn">FALSE</span></span>
+<span id="cb12-30"><a href="#cb12-30" tabindex="-1"></a>)</span>
+<span id="cb12-31"><a href="#cb12-31" tabindex="-1"></a></span>
+<span id="cb12-32"><a href="#cb12-32" tabindex="-1"></a><span class="co"># Map each response column back to its functional-domain location.</span></span>
+<span id="cb12-33"><a href="#cb12-33" tabindex="-1"></a>dat_long<span class="sc">$</span>yindex_col <span class="ot">&lt;-</span> <span class="fu">as.integer</span>(dat_long<span class="sc">$</span>yindex_col)</span>
+<span id="cb12-34"><a href="#cb12-34" tabindex="-1"></a>dat_long<span class="sc">$</span>yindex <span class="ot">&lt;-</span> s_grid[dat_long<span class="sc">$</span>yindex_col]</span>
+<span id="cb12-35"><a href="#cb12-35" tabindex="-1"></a>dat_long<span class="sc">$</span>time <span class="ot">&lt;-</span> <span class="fu">as.numeric</span>(dat_long<span class="sc">$</span>time)</span>
+<span id="cb12-36"><a href="#cb12-36" tabindex="-1"></a></span>
+<span id="cb12-37"><a href="#cb12-37" tabindex="-1"></a><span class="fu">head</span>(dat_long[<span class="fu">c</span>(<span class="st">&quot;ID&quot;</span>, <span class="st">&quot;time&quot;</span>, <span class="st">&quot;yindex&quot;</span>, <span class="st">&quot;Y&quot;</span>)])</span>
+<span id="cb12-38"><a href="#cb12-38" tabindex="-1"></a></span>
+<span id="cb12-39"><a href="#cb12-39" tabindex="-1"></a><span class="co"># Construct the ydata object expected by refund::pffr().</span></span>
+<span id="cb12-40"><a href="#cb12-40" tabindex="-1"></a>Y.mat <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb12-41"><a href="#cb12-41" tabindex="-1"></a>  <span class="at">.obs =</span> <span class="fu">seq_len</span>(<span class="fu">nrow</span>(dat_long)),</span>
+<span id="cb12-42"><a href="#cb12-42" tabindex="-1"></a>  <span class="at">.index =</span> dat_long<span class="sc">$</span>yindex,</span>
+<span id="cb12-43"><a href="#cb12-43" tabindex="-1"></a>  <span class="at">.value =</span> dat_long<span class="sc">$</span>Y</span>
+<span id="cb12-44"><a href="#cb12-44" tabindex="-1"></a>)</span>
+<span id="cb12-45"><a href="#cb12-45" tabindex="-1"></a></span>
+<span id="cb12-46"><a href="#cb12-46" tabindex="-1"></a>fit_pffr_irregular <span class="ot">&lt;-</span> refund<span class="sc">::</span><span class="fu">pffr</span>(</span>
+<span id="cb12-47"><a href="#cb12-47" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb12-48"><a href="#cb12-48" tabindex="-1"></a>  <span class="at">algorithm =</span> <span class="st">&quot;bam&quot;</span>,</span>
+<span id="cb12-49"><a href="#cb12-49" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(),</span>
+<span id="cb12-50"><a href="#cb12-50" tabindex="-1"></a>  <span class="at">discrete =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb12-51"><a href="#cb12-51" tabindex="-1"></a>  <span class="at">yind =</span> Y.mat<span class="sc">$</span>.index,</span>
+<span id="cb12-52"><a href="#cb12-52" tabindex="-1"></a>  <span class="at">ydata =</span> Y.mat,</span>
+<span id="cb12-53"><a href="#cb12-53" tabindex="-1"></a>  <span class="at">bs.yindex =</span> <span class="fu">list</span>(<span class="at">bs =</span> <span class="st">&quot;bs&quot;</span>, <span class="at">k =</span> <span class="dv">11</span>),</span>
+<span id="cb12-54"><a href="#cb12-54" tabindex="-1"></a>  <span class="at">data =</span> dat_long</span>
+<span id="cb12-55"><a href="#cb12-55" tabindex="-1"></a>)</span></code></pre></div>
+<p>Now pass that initial fit to <code>fgee()</code>. Notice that
+<code>pffr.mod</code> receives the fitted <code>pffr()</code> object,
+while <code>data</code> is still the original wide data frame containing
+the cluster and longitudinal variables.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>fit_from_irregular_pffr <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>  <span class="at">formula =</span> Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a>  <span class="at">pffr.mod =</span> fit_pffr_irregular,</span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(),</span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb13-8"><a href="#cb13-8" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;exchangeable&quot;</span>,</span>
+<span id="cb13-9"><a href="#cb13-9" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;independent&quot;</span>,</span>
+<span id="cb13-10"><a href="#cb13-10" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="st">&quot;wild&quot;</span>,</span>
+<span id="cb13-11"><a href="#cb13-11" tabindex="-1"></a>  <span class="at">var.type =</span> <span class="st">&quot;sandwich&quot;</span></span>
+<span id="cb13-12"><a href="#cb13-12" tabindex="-1"></a>)</span>
+<span id="cb13-13"><a href="#cb13-13" tabindex="-1"></a></span>
+<span id="cb13-14"><a href="#cb13-14" tabindex="-1"></a><span class="fu">fgee.plot</span>(fit_from_irregular_pffr)</span></code></pre></div>
+<p>This route is also useful when the initial <code>pffr()</code> fit
+needs a custom basis, custom smoothing settings, or other preprocessing
+that you want to control directly.</p>
+</div>
+</div>
+<div id="what-the-one-step-fit-does" class="section level1">
+<h1>What the one-step fit does</h1>
+<p>The public estimator follows the same basic sequence for every
+supported family:</p>
+<ol style="list-style-type: decimal">
+<li>fit the initial function-on-scalar model with
+<code>refund::pffr()</code> (unless <code>pffr.mod</code> is
+supplied);</li>
+<li>estimate the working correlation from the initial residuals;</li>
+<li>choose the smoothing parameters (fast cluster cross-validation by
+default);</li>
+<li>take one penalized GEE update; and</li>
+<li>rebuild the working quantities at the updated mean for variance
+estimation and confidence intervals.</li>
+</ol>
+<p>This is the one-step estimator described in the paper. It avoids
+repeatedly refitting the full estimating equation while still using the
+working covariance to improve efficiency.</p>
+</div>
+<div id="advanced-options" class="section level1">
+<h1>Advanced options</h1>
+<p>Most analyses can use the defaults above. The options in this section
+are mainly useful for large datasets, reproducibility work, or method
+development.</p>
+<div id="reducing-the-fitted-object-size" class="section level2">
+<h2>Reducing the fitted object size</h2>
 <p>Large fitted objects can be reduced after fitting with:</p>
-<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" tabindex="-1"></a>fit_small <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
-<span id="cb19-2"><a href="#cb19-2" tabindex="-1"></a>  Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
-<span id="cb19-3"><a href="#cb19-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
-<span id="cb19-4"><a href="#cb19-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
-<span id="cb19-5"><a href="#cb19-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">gaussian</span>(),</span>
-<span id="cb19-6"><a href="#cb19-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
-<span id="cb19-7"><a href="#cb19-7" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="cn">FALSE</span>,</span>
-<span id="cb19-8"><a href="#cb19-8" tabindex="-1"></a>  <span class="at">sp.method =</span> <span class="st">&quot;sandwich_qreml&quot;</span>,</span>
-<span id="cb19-9"><a href="#cb19-9" tabindex="-1"></a>  <span class="at">keep.data =</span> <span class="cn">FALSE</span>,</span>
-<span id="cb19-10"><a href="#cb19-10" tabindex="-1"></a>  <span class="at">keep.initial.fit =</span> <span class="cn">FALSE</span>,</span>
-<span id="cb19-11"><a href="#cb19-11" tabindex="-1"></a>  <span class="at">keep.working.stats =</span> <span class="cn">FALSE</span></span>
-<span id="cb19-12"><a href="#cb19-12" tabindex="-1"></a>)</span></code></pre></div>
-<p>The legacy engine remains unexported and is reached only by package
-regression tests and method-development code.</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a>fit_small <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a>  Y <span class="sc">~</span> X1 <span class="sc">+</span> X2,</span>
+<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a>  <span class="at">data =</span> dat,</span>
+<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a>  <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(),</span>
+<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;exchangeable&quot;</span>,</span>
+<span id="cb14-8"><a href="#cb14-8" tabindex="-1"></a>  <span class="at">corr_fn =</span> <span class="st">&quot;independent&quot;</span>,</span>
+<span id="cb14-9"><a href="#cb14-9" tabindex="-1"></a>  <span class="at">joint.CI =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb14-10"><a href="#cb14-10" tabindex="-1"></a>  <span class="at">keep.data =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb14-11"><a href="#cb14-11" tabindex="-1"></a>  <span class="at">keep.initial.fit =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb14-12"><a href="#cb14-12" tabindex="-1"></a>  <span class="at">keep.working.stats =</span> <span class="cn">FALSE</span></span>
+<span id="cb14-13"><a href="#cb14-13" tabindex="-1"></a>)</span></code></pre></div>
+<p><code>working.retain = &quot;auto&quot;</code> keeps the smallest set of
+cluster working statistics needed by the requested variance and CI
+procedure. The other choices are <code>&quot;aggregate&quot;</code>,
+<code>&quot;scores&quot;</code>, and <code>&quot;full&quot;</code>.</p>
+</div>
+<div id="smoothing-parameter-tuning" class="section level2">
+<h2>Smoothing-parameter tuning</h2>
+<p><code>sp.method = &quot;auto&quot;</code> is recommended. It uses
+<code>&quot;fastk_staged&quot;</code> for Gaussian identity-link models and
+<code>&quot;fastk_grad_fast&quot;</code> for the supported non-Gaussian
+families.</p>
+<p>Available smoothing selectors include:</p>
+<table>
+<colgroup>
+<col width="50%" />
+<col width="50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th><code>sp.method</code></th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>&quot;auto&quot;</code></td>
+<td>recommended family-specific default</td>
+</tr>
+<tr class="even">
+<td><code>&quot;fastk_staged&quot;</code></td>
+<td>staged fast cluster CV; Gaussian identity default</td>
+</tr>
+<tr class="odd">
+<td><code>&quot;fastk_grad_fast&quot;</code></td>
+<td>exact fastK criterion with a shorter adaptive search; non-Gaussian
+default</td>
+</tr>
+<tr class="even">
+<td><code>&quot;fastk_grad&quot;</code></td>
+<td>earlier analytic-gradient fastK search</td>
+</tr>
+<tr class="odd">
+<td><code>&quot;sandwich_qreml&quot;</code></td>
+<td>experimental coefficient-space working restricted
+quasi-likelihood</td>
+</tr>
+<tr class="even">
+<td><code>&quot;qreml_fastk&quot;</code></td>
+<td>qREML start followed by exact fastK optimization</td>
+</tr>
+</tbody>
+</table>
+<p>The last two are useful for research and diagnostics.
+<code>sandwich_qreml</code> is not the automatic default because it can
+be sensitive to working-correlation misspecification.
+<code>qreml_fastk</code> is retained for reproducibility; in current
+simulations it reached the same fastK solutions by a slower route. In
+the latest selector simulations, its run time was about 1.16–1.31 times
+that of <code>fastk_grad_fast</code>. Pure <code>sandwich_qreml</code>
+had worst-case coefficient-RMSE ratios of 1.565 for negative binomial
+and 1.479 for beta under functional-independence working-correlation
+misspecification. <code>fastk_staged</code> remains useful for Gaussian
+identity models but has not shown an advantage for the non-Gaussian
+families.</p>
+<div id="why-the-non-gaussian-default-changed-in-0.2.0" class="section level3">
+<h3>Why the non-Gaussian default changed in 0.2.0</h3>
+<p>Earlier builds used <code>&quot;fastk_grad&quot;</code> for non-Gaussian
+models. Much of its run time was spent evaluating many starting values
+before the continuous optimizer did very much work.
+<code>&quot;fastk_grad_fast&quot;</code> minimizes the same fastK criterion but
+uses a shorter adaptive start search and usually one continuous
+optimization. In the selector simulations it gave essentially the same
+estimation and coverage as <code>&quot;fastk_grad&quot;</code> with less tuning
+time. Pure qREML could be more efficient when the working correlation
+was well specified, but it was noticeably worse under some
+functional-correlation misspecification settings, so it remains
+opt-in.</p>
+</div>
+</div>
+<div id="workspace-memory-for-non-gaussian-tuning" class="section level2">
+<h2>Workspace memory for non-Gaussian tuning</h2>
+<p><code>fastk.memory = &quot;balanced&quot;</code> is the recommended default. It
+is the only current layout that builds <code>prep$X_eval</code>, which
+is required by the compiled fastK loss/gradient kernel. The
+<code>&quot;speed&quot;</code> and <code>&quot;lowmem&quot;</code> layouts therefore use the
+R evaluation path.</p>
+</div>
+<div id="optional-compiled-fastk-kernel" class="section level2">
+<h2>Optional compiled fastK kernel</h2>
+<p>For supported non-Gaussian families, the balanced workspace can
+evaluate the fastK loss and gradient with the package’s compiled kernel.
+This changes only the computation, not the tuning criterion. It is used
+automatically when available and can be disabled for reference
+comparisons:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a>fit_R_kernel <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a>  Y <span class="sc">~</span> X1 <span class="sc">+</span> X2, <span class="at">data =</span> dat, <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(), <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb15-4"><a href="#cb15-4" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;exchangeable&quot;</span>, <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span>,</span>
+<span id="cb15-5"><a href="#cb15-5" tabindex="-1"></a>  <span class="at">fastk.kernel =</span> <span class="cn">FALSE</span></span>
+<span id="cb15-6"><a href="#cb15-6" tabindex="-1"></a>)</span></code></pre></div>
+</div>
+<div id="negative-binomial-and-beta-families" class="section level2">
+<h2>Negative binomial and beta families</h2>
+<p>Negative binomial and beta models each have one extra parameter that
+matters to the working variance and to the non-Gaussian fastK loss: the
+NB2 size parameter and the beta precision parameter. Use the
+<code>mgcv</code> family functions so those values are carried through
+the initial <code>pffr()</code> fit. In the examples below,
+<code>nb_dat</code> denotes count-response data and
+<code>beta_dat</code> denotes proportion-response data with values
+strictly inside <code>(0, 1)</code>.</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>fit_nb <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a>  Y <span class="sc">~</span> X1 <span class="sc">+</span> X2, <span class="at">data =</span> nb_dat, <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a>  <span class="at">family =</span> mgcv<span class="sc">::</span><span class="fu">nb</span>(),</span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>, <span class="at">corr_long =</span> <span class="st">&quot;exchangeable&quot;</span>, <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span></span>
+<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a>)</span>
+<span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a></span>
+<span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a><span class="co"># Fix theta if you want to supply it rather than estimate it initially</span></span>
+<span id="cb16-8"><a href="#cb16-8" tabindex="-1"></a>fit_nb_fixed <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb16-9"><a href="#cb16-9" tabindex="-1"></a>  Y <span class="sc">~</span> X1 <span class="sc">+</span> X2, <span class="at">data =</span> nb_dat, <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb16-10"><a href="#cb16-10" tabindex="-1"></a>  <span class="at">family =</span> mgcv<span class="sc">::</span><span class="fu">nb</span>(<span class="at">theta =</span> <span class="dv">3</span>),</span>
+<span id="cb16-11"><a href="#cb16-11" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>, <span class="at">corr_long =</span> <span class="st">&quot;exchangeable&quot;</span>, <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span></span>
+<span id="cb16-12"><a href="#cb16-12" tabindex="-1"></a>)</span>
+<span id="cb16-13"><a href="#cb16-13" tabindex="-1"></a></span>
+<span id="cb16-14"><a href="#cb16-14" tabindex="-1"></a>fit_beta <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb16-15"><a href="#cb16-15" tabindex="-1"></a>  Y <span class="sc">~</span> X1 <span class="sc">+</span> X2, <span class="at">data =</span> beta_dat, <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb16-16"><a href="#cb16-16" tabindex="-1"></a>  <span class="at">family =</span> mgcv<span class="sc">::</span><span class="fu">betar</span>(),</span>
+<span id="cb16-17"><a href="#cb16-17" tabindex="-1"></a>  <span class="at">time =</span> <span class="st">&quot;time&quot;</span>, <span class="at">corr_long =</span> <span class="st">&quot;exchangeable&quot;</span>, <span class="at">corr_fn =</span> <span class="st">&quot;ar1&quot;</span></span>
+<span id="cb16-18"><a href="#cb16-18" tabindex="-1"></a>)</span></code></pre></div>
+<p><code>fastFGEE</code> keeps the initial nuisance value fixed while
+smoothing parameters are tuned, then updates it at the final
+working-state calculation. It does not re-estimate the nuisance
+parameter for every candidate smoothing vector.
+<code>MASS::negative.binomial()</code> is not supported here; use
+<code>mgcv::nb()</code> instead. For beta regression, responses should
+lie strictly between 0 and 1. Boundary adjustments are reported rather
+than silently ignored.</p>
+</div>
+<div id="numerical-dependencies" class="section level2">
+<h2>Numerical dependencies</h2>
+<p>You normally do not need to select a numerical backend. Regular-grid
+AR(1) and exchangeable working correlations use direct package
+operators. Irregularly sampled continuous-time AR(1) uses an internal
+tridiagonal precision implementation based on Allévius (2018), and
+symmetric positive-definite solves use registered Rcpp/LAPACK
+routines.</p>
+<p><code>SuperGauss</code> is optional. Install it only if you want to
+request the Toeplitz backend explicitly:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a><span class="fu">install.packages</span>(<span class="st">&quot;SuperGauss&quot;</span>)</span>
+<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a></span>
+<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a>fit_sg <span class="ot">&lt;-</span> <span class="fu">fgee</span>(</span>
+<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a>  Y <span class="sc">~</span> X1 <span class="sc">+</span> X2, <span class="at">data =</span> dat, <span class="at">cluster =</span> <span class="st">&quot;ID&quot;</span>,</span>
+<span id="cb17-5"><a href="#cb17-5" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">binomial</span>(), <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
+<span id="cb17-6"><a href="#cb17-6" tabindex="-1"></a>  <span class="at">corr_long =</span> <span class="st">&quot;ar1&quot;</span>, <span class="at">corr_fn =</span> <span class="st">&quot;independent&quot;</span>,</span>
+<span id="cb17-7"><a href="#cb17-7" tabindex="-1"></a>  <span class="at">corr.solver =</span> <span class="st">&quot;supergauss&quot;</span></span>
+<span id="cb17-8"><a href="#cb17-8" tabindex="-1"></a>)</span></code></pre></div>
+<div id="other-structured-working-correlations" class="section level3">
+<h3>Other structured working correlations</h3>
+<p>The current public interface keeps the correlation choices
+deliberately small, but several other structures can be handled
+efficiently without forming and inverting a dense covariance matrix. On
+a regularly spaced one-dimensional grid, a stationary correlation that
+depends only on lag has a Toeplitz correlation matrix. Examples include
+stationary AR(<span class="math inline">\(p\)</span>) models and Matérn
+kernels. Matérn <span class="math inline">\(\nu=1/2\)</span> is the
+exponential kernel; Matérn <span class="math inline">\(\nu=3/2\)</span>
+and <span class="math inline">\(\nu=5/2\)</span> are common smoother
+alternatives. On an equally spaced grid these structures are Toeplitz
+and can, in principle, use fast Toeplitz solvers such as those in
+<code>SuperGauss</code> rather than dense inversion. Irregular spacing
+generally breaks the Toeplitz structure and requires a different
+operator.</p>
+<p>FPCA-based working correlations are a different type of extension.
+They are not generally Toeplitz, but their low-rank structure can still
+be exploited with low-rank matrix identities.
+<code>corr_fn = &quot;fpca&quot;</code> is the current example; richer
+longitudinal or functional FPCA working correlations could be added in
+the future.</p>
+<p>AR(<span class="math inline">\(p\)</span>), Matérn, and additional
+FPCA-based structures are not currently public <code>corr_long</code> or
+<code>corr_fn</code> options. If one of these structures would be useful
+for your application, please contact the package author. Use cases are
+helpful for prioritizing which correlation models to add next. For
+background, see Ling and Lysy (2022) for fast stationary Toeplitz
+calculations in <code>SuperGauss</code>, and Rasmussen and Williams
+(2006) for Matérn covariance functions.</p>
+<p>The archived <code>irregulAR1</code> and <code>sanic</code> packages
+are not required by <code>fastFGEE</code> 0.2.0.</p>
+</div>
+</div>
+</div>
+<div id="what-changed-in-fastfgee-0.2.0" class="section level1">
+<h1>What changed in fastFGEE 0.2.0</h1>
+<p>The main user-facing changes are straightforward:</p>
+<ul>
+<li>public fitting uses the one-step estimator;</li>
+<li><code>corr_long</code> and <code>corr_fn</code> make the two
+working-correlation directions explicit;</li>
+<li><code>var.type</code> controls the variance estimator;</li>
+<li><code>sp.method = &quot;auto&quot;</code> uses staged fastK for Gaussian
+identity models and <code>fastk_grad_fast</code> for supported
+non-Gaussian models;</li>
+<li>negative binomial and beta regression are supported through
+<code>mgcv::nb()</code> and <code>mgcv::betar()</code>;</li>
+<li><code>fastk.memory = &quot;lowmem&quot;</code> is deprecated; and</li>
+<li>internal Rcpp/LAPACK and irregular-AR(1) routines remove the old
+<code>sanic</code> and <code>irregulAR1</code> package
+dependencies.</li>
+</ul>
+</div>
+<div id="notes-for-users-of-older-versions" class="section level1">
+<h1>Notes for users of older versions</h1>
+<p>The working-correlation directions are specified separately:
+<code>corr_long</code> acts across repeated observations within a
+cluster and <code>corr_fn</code> acts along the functional domain. The
+older <code>cov.type</code> interface is replaced by these two
+arguments, and the older <code>sandwich</code> argument is replaced by
+<code>var.type</code>.</p>
+<p>The public <code>fgee()</code> interface in 0.2.0 exposes only the
+validated one-step estimator. Arguments such as <code>exact</code>,
+<code>gee.fit</code>, <code>max.iter</code>, <code>tune.method</code>,
+and <code>working.engine</code> are not accepted by
+<code>fgee()</code>.</p>
+<p>Historical exact-GLS, pffr-only, legacy-engine, and fully iterated
+implementations remain unexported for regression testing and future
+method development.</p>
 </div>
 
 
